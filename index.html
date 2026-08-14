@@ -52,12 +52,38 @@
           <div class="search-results" id="search-results" role="listbox"></div>
         </div>
 
-        <div class="quick-picks" aria-label="Popular stocks">
-          <span>Popular</span>
-          <button type="button" data-symbol="AAPL">AAPL</button>
-          <button type="button" data-symbol="MSFT">MSFT</button>
-          <button type="button" data-symbol="NVDA">NVDA</button>
-          <button type="button" data-symbol="AMZN">AMZN</button>
+        <div class="stock-starters" aria-labelledby="stock-starters-title">
+          <div class="starter-heading">
+            <div>
+              <strong id="stock-starters-title">Not sure what to search?</strong>
+              <span>Tap any example to open its latest analysis.</span>
+            </div>
+            <span class="starter-live"><i aria-hidden="true"></i>Loads from Polygon</span>
+          </div>
+
+          <div class="starter-group">
+            <span class="starter-group-title">Familiar companies</span>
+            <div class="starter-chips">
+              <button type="button" data-symbol="AAPL" data-name="Apple"><strong>AAPL</strong><small>Apple</small></button>
+              <button type="button" data-symbol="MSFT" data-name="Microsoft"><strong>MSFT</strong><small>Microsoft</small></button>
+              <button type="button" data-symbol="NVDA" data-name="Nvidia"><strong>NVDA</strong><small>Nvidia</small></button>
+              <button type="button" data-symbol="AMZN" data-name="Amazon"><strong>AMZN</strong><small>Amazon</small></button>
+              <button type="button" data-symbol="GOOGL" data-name="Alphabet"><strong>GOOGL</strong><small>Google</small></button>
+              <button type="button" data-symbol="META" data-name="Meta Platforms"><strong>META</strong><small>Meta</small></button>
+              <button type="button" data-symbol="TSLA" data-name="Tesla"><strong>TSLA</strong><small>Tesla</small></button>
+              <button type="button" data-symbol="ASML" data-name="ASML"><strong>ASML</strong><small>ASML</small></button>
+            </div>
+          </div>
+
+          <div class="starter-group">
+            <span class="starter-group-title">ETFs — ready-made baskets</span>
+            <div class="starter-chips">
+              <button type="button" data-symbol="SPY" data-name="SPDR S&amp;P 500 ETF"><strong>SPY</strong><small>S&amp;P 500</small></button>
+              <button type="button" data-symbol="QQQ" data-name="Invesco QQQ ETF"><strong>QQQ</strong><small>Nasdaq 100</small></button>
+              <button type="button" data-symbol="VOO" data-name="Vanguard S&amp;P 500 ETF"><strong>VOO</strong><small>S&amp;P 500</small></button>
+              <button type="button" data-symbol="IWM" data-name="iShares Russell 2000 ETF"><strong>IWM</strong><small>Smaller US firms</small></button>
+            </div>
+          </div>
         </div>
         <p class="api-scope">Live API search · no saved stock library</p>
       </section>

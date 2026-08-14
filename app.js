@@ -1017,11 +1017,13 @@
       }
     });
 
-    document.querySelector(".quick-picks").addEventListener("click", (event) => {
+    document.querySelector(".stock-starters").addEventListener("click", (event) => {
       const button = event.target.closest("[data-symbol]");
       if (button) {
         const symbol = button.dataset.symbol;
-        loadLiveStock({ symbol, name: symbol, exchange: "US", currency: "USD" }, { scroll: true });
+        const name = button.dataset.name || symbol;
+        elements.search.value = symbol;
+        loadLiveStock({ symbol, name, exchange: "US", currency: "USD" }, { scroll: true });
       }
     });
 
