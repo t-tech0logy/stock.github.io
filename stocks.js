@@ -24,5 +24,6 @@ window.STOCK_LIBRARY = [
   { symbol: "NFLX", name: "Netflix", sector: "Media", exchange: "NASDAQ" },
   { symbol: "CMCSA", name: "Comcast", sector: "Media", exchange: "NASDAQ" },
   { symbol: "COST", name: "Costco", sector: "Consumer", exchange: "NASDAQ" },
-  { symbol: "AMD", name: "Advanced Micro Devices Inc", sector: "Technology", exchange: "NASDAQ", cik: "0000002488" }
+  { symbol: "AMD", name: "Advanced Micro Devices Inc", sector: "Technology", exchange: "NASDAQ", cik: "0000002488" },
+  { symbol: "NIO", name: "Nio Inc.", sector: "Other", exchange: "NYSE", cik: "0001736541" }
 ];
