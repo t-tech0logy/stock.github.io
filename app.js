@@ -3,15 +3,24 @@
 
   const polygonApiKey = String(window.PLAINSTOCK_CONFIG?.polygonApiKey || "").trim();
   const polygonApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonApiRoot || "https://api.polygon.io").replace(/\/$/, "");
+  const polygonExtraApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonExtraApiRoot || polygonApiRoot).replace(/\/$/, "");
   const searchDelay = 450;
+  const freeRequestLimit = 5;
+  const requestWindowMs = 60_500;
   const state = {
     data: null,
+    analysis: null,
     chartRange: 90,
     chartData: [],
+    benchmarkHistory: null,
+    benchmarkPromise: null,
     activeSearchIndex: -1,
     searchMatches: [],
     searchTimer: null,
-    searchRequestId: 0
+    searchRequestId: 0,
+    loadId: 0,
+    requestTimes: [],
+    requestGate: Promise.resolve()
   };
 
   const elements = {
@@ -46,12 +55,18 @@
     metricsGrid: document.querySelector("#metrics-grid"),
     numbersNote: document.querySelector("#numbers-note"),
     positiveList: document.querySelector("#positive-list"),
-    cautionList: document.querySelector("#caution-list")
+    cautionList: document.querySelector("#caution-list"),
+    contextGrid: document.querySelector("#context-grid"),
+    dividendResult: document.querySelector("#dividend-result"),
+    newsResult: document.querySelector("#news-result"),
+    riskResult: document.querySelector("#risk-result")
   };
 
   const icons = {
     momentum: "↗",
     longterm: "⌁",
+    market: "⇄",
+    volume: "▥",
     range: "↥",
     stability: "≈"
   };
@@ -75,8 +90,47 @@
     return date.toISOString().slice(0, 10);
   }
 
-  async function polygonRequest(path, parameters = {}, optional = false) {
-    const url = new URL(`${polygonApiRoot}${path}`);
+  function friendlySecurityType(type) {
+    const code = String(type || "").toUpperCase();
+    if (["ETF", "ETV", "ETN", "FUND"].includes(code)) return "Exchange-traded fund";
+    if (["ADRC", "ADRP", "ADR"].includes(code)) return "International listing";
+    if (code === "PFD") return "Preferred shares";
+    if (code === "CS") return "Public company";
+    return "Listed investment";
+  }
+
+  function delay(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  async function reservePolygonRequest(onWait) {
+    const previous = state.requestGate;
+    let release;
+    state.requestGate = new Promise((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
+    try {
+      while (true) {
+        const now = Date.now();
+        state.requestTimes = state.requestTimes.filter((time) => now - time < requestWindowMs);
+        if (state.requestTimes.length < freeRequestLimit) {
+          state.requestTimes.push(now);
+          return;
+        }
+        const waitMs = Math.max(500, requestWindowMs - (now - state.requestTimes[0]));
+        if (typeof onWait === "function") onWait(Math.ceil(waitMs / 1000));
+        await delay(waitMs);
+      }
+    } finally {
+      release();
+    }
+  }
+
+  async function polygonRequest(path, parameters = {}, optional = false, options = {}) {
+    await reservePolygonRequest(options.onWait);
+    const url = new URL(`${options.root || polygonApiRoot}${path}`);
     Object.entries(parameters).forEach(([name, value]) => {
       if (value !== null && value !== undefined) url.searchParams.set(name, String(value));
     });
@@ -90,6 +144,12 @@
     }
     if (!response.ok || payload?.status === "ERROR") {
       if (optional && [403, 404].includes(response.status)) return null;
+      if (response.status === 429 && !options.retried) {
+        const retrySeconds = Math.max(5, safeNumber(response.headers.get("retry-after")) || 60);
+        if (typeof options.onWait === "function") options.onWait(retrySeconds);
+        await delay(retrySeconds * 1000);
+        return polygonRequest(path, parameters, optional, { ...options, retried: true });
+      }
       if (response.status === 401 || response.status === 403) {
         throw new Error("The Polygon API key is missing, invalid, or does not have access to this data.");
       }
@@ -101,20 +161,8 @@
     return payload;
   }
 
-  async function fetchPolygonStock(stock) {
-    const end = new Date();
-    const start = new Date(end);
-    start.setUTCFullYear(start.getUTCFullYear() - 1);
-    const encodedSymbol = encodeURIComponent(stock.symbol);
-    const [pricePayload, detailsPayload] = await Promise.all([
-      polygonRequest(`/v2/aggs/ticker/${encodedSymbol}/range/1/day/${isoDate(start)}/${isoDate(end)}`, {
-        adjusted: true,
-        sort: "asc",
-        limit: 5000
-      }),
-      polygonRequest(`/v3/reference/tickers/${encodedSymbol}`, {}, true).catch(() => null)
-    ]);
-    const history = (pricePayload?.results || [])
+  function barsFromPayload(payload) {
+    return (payload?.results || [])
       .map((bar) => ({
         date: new Date(bar.t).toISOString().slice(0, 10),
         open: safeNumber(bar.o),
@@ -125,7 +173,55 @@
         vwap: safeNumber(bar.vw)
       }))
       .filter((point) => point.date && Number.isFinite(point.close));
+  }
+
+  async function fetchDailyHistory(symbol, start, end, onWait) {
+    const encodedSymbol = encodeURIComponent(symbol);
+    const payload = await polygonRequest(
+      `/v2/aggs/ticker/${encodedSymbol}/range/1/day/${isoDate(start)}/${isoDate(end)}`,
+      { adjusted: true, sort: "asc", limit: 5000 },
+      false,
+      { onWait }
+    );
+    return barsFromPayload(payload);
+  }
+
+  async function getBenchmarkHistory(start, end, onWait) {
+    if (state.benchmarkHistory?.length) return state.benchmarkHistory;
+    if (!state.benchmarkPromise) {
+      state.benchmarkPromise = fetchDailyHistory("SPY", start, end, onWait)
+        .then((history) => {
+          state.benchmarkHistory = history;
+          return history;
+        })
+        .catch(() => null)
+        .finally(() => {
+          state.benchmarkPromise = null;
+        });
+    }
+    return state.benchmarkPromise;
+  }
+
+  async function fetchPolygonStock(stock, onWait) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
+    const encodedSymbol = encodeURIComponent(stock.symbol);
+    const pricePromise = fetchDailyHistory(stock.symbol, start, end, onWait);
+    const detailsPromise = stock.referenceComplete
+      ? Promise.resolve(null)
+      : polygonRequest(`/v3/reference/tickers/${encodedSymbol}`, {}, true, { onWait }).catch(() => null);
+    const benchmarkPromise = stock.symbol === "SPY"
+      ? Promise.resolve(null)
+      : getBenchmarkHistory(start, end, onWait);
+    const [history, detailsPayload, downloadedBenchmark] = await Promise.all([
+      pricePromise,
+      detailsPromise,
+      benchmarkPromise
+    ]);
     if (!history.length) throw new Error(`Polygon did not return price history for ${stock.symbol}.`);
+    const benchmarkHistory = stock.symbol === "SPY" ? history : downloadedBenchmark;
+    if (stock.symbol === "SPY") state.benchmarkHistory = history;
     const currentPrice = history.at(-1).close;
     const details = detailsPayload?.results || {};
     const highs = history.map((point) => point.high ?? point.close).filter(Number.isFinite);
@@ -135,13 +231,16 @@
     return {
       symbol: stock.symbol,
       name: details.name || stock.name || stock.symbol,
-      sector: details.sic_description || stock.sector || "Other",
+      sector: details.sic_description || stock.sector || friendlySecurityType(details.type || stock.type),
       industry: details.sic_description || null,
       exchange: details.primary_exchange || stock.exchange || "US",
+      type: details.type || stock.type || "Stock",
+      description: details.description || null,
+      homepageUrl: details.homepage_url || null,
       currency,
       filingCurrency: currency,
       filingCurrencyToMarketRate: 1,
-      cik: stock.cik || null,
+      cik: details.cik || stock.cik || null,
       updatedAt: new Date().toISOString(),
       priceAsOf: history.at(-1).date,
       filingAsOf: null,
@@ -149,6 +248,11 @@
       sources: {
         prices: "Polygon adjusted daily aggregates",
         priceUrl: `${polygonApiRoot}/v2/aggs/ticker/${encodedSymbol}`
+      },
+      benchmark: {
+        symbol: "SPY",
+        name: "S&P 500 fund",
+        history: benchmarkHistory || []
       },
       market: {
         currentPrice,
@@ -301,6 +405,7 @@
   }
 
   function movingAverage(history, tradingDays) {
+    if (history.length < tradingDays) return null;
     return average(history.slice(-tradingDays).map((point) => safeNumber(point.close)));
   }
 
@@ -332,6 +437,35 @@
     return 18;
   }
 
+  function scoreRelativePerformance(value, strongLead) {
+    if (!Number.isFinite(value)) return null;
+    if (value >= strongLead) return 90;
+    if (value >= strongLead * 0.3) return 75;
+    if (value >= -strongLead * 0.3) return 55;
+    if (value >= -strongLead) return 34;
+    return 16;
+  }
+
+  function volumeSignalFor(priceReturn, volumeChange) {
+    if (!Number.isFinite(priceReturn) || !Number.isFinite(volumeChange)) {
+      return { score: null, label: "No data", description: "There was not enough recent trading activity to compare." };
+    }
+    const activity = volumeChange >= 0.15 ? "busier" : volumeChange <= -0.15 ? "quieter" : "near normal";
+    const activityText = `${formatUnsignedPercent(volumeChange)} ${activity} than the previous few weeks`;
+
+    if (priceReturn >= 0.02) {
+      if (volumeChange >= 0.15) return { score: 86, label: "Rise supported", description: `The price rose ${formatUnsignedPercent(priceReturn)} in five days while trading was ${activityText}.` };
+      if (volumeChange >= -0.15) return { score: 70, label: "Some support", description: `The price rose ${formatUnsignedPercent(priceReturn)} in five days with trading activity ${activity}.` };
+      return { score: 52, label: "Weak support", description: `The price rose ${formatUnsignedPercent(priceReturn)} in five days, but trading was ${activityText}.` };
+    }
+    if (priceReturn <= -0.02) {
+      if (volumeChange >= 0.15) return { score: 18, label: "Heavy selling", description: `The price fell ${formatUnsignedPercent(priceReturn)} in five days while trading was ${activityText}.` };
+      if (volumeChange >= -0.15) return { score: 36, label: "Selling pressure", description: `The price fell ${formatUnsignedPercent(priceReturn)} in five days with trading activity ${activity}.` };
+      return { score: 48, label: "Quiet pullback", description: `The price fell ${formatUnsignedPercent(priceReturn)} in five days, but trading was ${activityText}.` };
+    }
+    return { score: 56, label: "No clear push", description: `The price was almost unchanged over five days and trading activity was ${activity}.` };
+  }
+
   function analyze(data) {
     const market = data.market || {};
     const history = (data.market?.history || []).filter((point) => Number.isFinite(safeNumber(point.close)));
@@ -341,10 +475,12 @@
     const oneMonthReturn = periodReturn(history, 21);
     const threeMonthReturn = periodReturn(history, 63);
     const oneYearReturn = periodReturn(history, 252);
+    const fiveDayReturn = periodReturn(history, 5);
     const average50 = movingAverage(history, 50);
     const average200 = movingAverage(history, 200);
     const distanceFrom50 = current && average50 ? current / average50 - 1 : null;
     const distanceFrom200 = current && average200 ? current / average200 - 1 : null;
+    const averageCross = average50 && average200 ? average50 / average200 - 1 : null;
     const high = safeNumber(market.fiftyTwoWeekHigh);
     const low = safeNumber(market.fiftyTwoWeekLow);
     const distanceFromHigh = current && high ? current / high - 1 : null;
@@ -356,6 +492,19 @@
     const recentVolume = average(history.slice(-20).map((point) => safeNumber(point.volume)));
     const previousVolume = average(history.slice(-40, -20).map((point) => safeNumber(point.volume)));
     const volumeTrend = recentVolume && previousVolume ? recentVolume / previousVolume - 1 : null;
+    const fiveDayVolume = average(history.slice(-5).map((point) => safeNumber(point.volume)));
+    const normalVolume = average(history.slice(-25, -5).map((point) => safeNumber(point.volume)));
+    const shortVolumeTrend = fiveDayVolume && normalVolume ? fiveDayVolume / normalVolume - 1 : null;
+    const volumeSignal = volumeSignalFor(fiveDayReturn, shortVolumeTrend);
+    const benchmarkHistory = (data.benchmark?.history || []).filter((point) => Number.isFinite(safeNumber(point.close)));
+    const benchmarkThreeMonthReturn = periodReturn(benchmarkHistory, 63);
+    const benchmarkOneYearReturn = periodReturn(benchmarkHistory, 252);
+    const relativeThreeMonth = Number.isFinite(threeMonthReturn) && Number.isFinite(benchmarkThreeMonthReturn)
+      ? threeMonthReturn - benchmarkThreeMonthReturn
+      : null;
+    const relativeOneYear = Number.isFinite(oneYearReturn) && Number.isFinite(benchmarkOneYearReturn)
+      ? oneYearReturn - benchmarkOneYearReturn
+      : null;
     const recentTrendScore = average([
       scorePriceReturn(oneMonthReturn, 0.08),
       scorePriceReturn(threeMonthReturn, 0.15),
@@ -363,16 +512,24 @@
     ]);
     const longTermScore = average([
       scorePriceReturn(oneYearReturn, 0.25),
-      scoreAboveAverage(distanceFrom200)
+      scoreAboveAverage(distanceFrom200),
+      scoreAboveAverage(averageCross)
     ]);
+    const marketComparisonScore = average([
+      scoreRelativePerformance(relativeThreeMonth, 0.05),
+      scoreRelativePerformance(relativeOneYear, 0.1)
+    ]);
+    const volumeSupportScore = volumeSignal.score;
     const rangeScore = scoreRangePosition(rangePosition);
     const stabilityScore = scoreStability(volatility, drawdown);
 
     const weightedInputs = [
-      [recentTrendScore, 0.35],
-      [longTermScore, 0.3],
-      [rangeScore, 0.15],
-      [stabilityScore, 0.2]
+      [recentTrendScore, 0.25],
+      [longTermScore, 0.25],
+      [marketComparisonScore, 0.2],
+      [volumeSupportScore, 0.1],
+      [rangeScore, 0.1],
+      [stabilityScore, 0.1]
     ].filter(([value]) => Number.isFinite(value));
     const usedWeight = weightedInputs.reduce((total, [, weight]) => total + weight, 0);
     const overall = usedWeight
@@ -383,13 +540,21 @@
       overall: Number.isFinite(overall) ? Math.round(overall) : null,
       recentTrendScore,
       longTermScore,
+      marketComparisonScore,
+      volumeSupportScore,
       rangeScore,
       stabilityScore,
+      fiveDayReturn,
       oneMonthReturn,
       threeMonthReturn,
       oneYearReturn,
+      benchmarkThreeMonthReturn,
+      benchmarkOneYearReturn,
+      relativeThreeMonth,
+      relativeOneYear,
       average50,
       average200,
+      averageCross,
       distanceFrom50,
       distanceFrom200,
       distanceFromHigh,
@@ -397,9 +562,15 @@
       typicalDailyMove,
       recentVolume,
       volumeTrend,
+      shortVolumeTrend,
+      volumeSignal,
       volatility,
       drawdown,
-      confidence: history.length >= 200 ? "One-year price view" : "Limited price history"
+      confidence: history.length >= 200 && benchmarkHistory.length >= 200
+        ? "Full market comparison"
+        : history.length >= 200
+          ? "One-year price view"
+          : "Limited price history"
     };
   }
 
@@ -414,13 +585,13 @@
     if (score >= 70) {
       return {
         title: "The price trend currently looks strong.",
-        summary: "Recent and longer-term movement are supportive, and the risk level clears this price-only model's bar. Company profits, debt, and valuation are not included."
+        summary: "The trend, wider-market comparison, trading activity, and price risk combine into a strong price signal. Company profits, debt, and valuation are not included."
       };
     }
     if (score >= 50) {
       return {
         title: "The price signals are mixed right now.",
-        summary: "Some price measures look healthy while others need patience. This free-data view cannot tell whether the underlying business is cheap or profitable."
+        summary: "Some measures look healthy while others need patience. Check the six questions below to see exactly where the mixed result comes from."
       };
     }
     return {
@@ -441,20 +612,20 @@
       return {
         signal: "BUY",
         status: "buy",
-        note: "Price signal only"
+        note: "Company finances not included"
       };
     }
     if (analysis.overall >= 50) {
       return {
         signal: "WAIT",
         status: "wait",
-        note: "Price signal only"
+        note: "Company finances not included"
       };
     }
     return {
       signal: "AVOID",
       status: "avoid",
-      note: "Price signal only"
+      note: "Company finances not included"
     };
   }
 
@@ -465,8 +636,22 @@
     }
     if (type === "longterm") {
       if (!Number.isFinite(score)) return "There was not enough history for a longer-term comparison.";
-      const relation = analysis.distanceFrom200 >= 0 ? "above" : "below";
-      return `The one-year change is ${formatPercent(analysis.oneYearReturn)}; the price is ${formatUnsignedPercent(analysis.distanceFrom200)} ${relation} its 200-day average.`;
+      const relation50 = analysis.distanceFrom50 >= 0 ? "above" : "below";
+      const relation200 = analysis.distanceFrom200 >= 0 ? "above" : "below";
+      return `The price is ${formatUnsignedPercent(analysis.distanceFrom50)} ${relation50} its 50-day average and ${formatUnsignedPercent(analysis.distanceFrom200)} ${relation200} its 200-day average.`;
+    }
+    if (type === "market") {
+      if (data.symbol === "SPY") return "SPY is the S&P 500 comparison fund, so it is treated as the neutral market starting point.";
+      if (!Number.isFinite(score)) return "The S&P 500 comparison could not be loaded.";
+      const useYear = Number.isFinite(analysis.relativeOneYear);
+      const stockReturn = useYear ? analysis.oneYearReturn : analysis.threeMonthReturn;
+      const benchmarkReturn = useYear ? analysis.benchmarkOneYearReturn : analysis.benchmarkThreeMonthReturn;
+      const difference = useYear ? analysis.relativeOneYear : analysis.relativeThreeMonth;
+      const result = difference >= 0 ? "ahead of" : "behind";
+      return `Over ${useYear ? "one year" : "three months"}, this investment moved ${formatPercent(stockReturn)} versus ${formatPercent(benchmarkReturn)} for the S&P 500 — ${formatUnsignedPercent(difference)} ${result} the market.`;
+    }
+    if (type === "volume") {
+      return analysis.volumeSignal.description;
     }
     if (type === "range") {
       if (!Number.isFinite(score)) return "The yearly price range could not be calculated.";
@@ -516,16 +701,23 @@
     elements.verdictTitle.textContent = verdict.title;
     elements.verdictSummary.textContent = verdict.summary;
 
+    const marketText = data.symbol === "SPY"
+      ? "Benchmark"
+      : scoreState(analysis.marketComparisonScore) === "good"
+        ? "Ahead"
+        : scoreState(analysis.marketComparisonScore) === "weak"
+          ? "Behind"
+          : "Similar";
     const signalItems = [
-      ["Recent trend", analysis.recentTrendScore],
-      ["Long-term", analysis.longTermScore],
-      ["Yearly strength", analysis.rangeScore],
-      ["Stability", analysis.stabilityScore]
+      ["Recent trend", analysis.recentTrendScore, null],
+      ["Long-term", analysis.longTermScore, null],
+      ["Vs S&P 500", analysis.marketComparisonScore, marketText],
+      ["Trading activity", analysis.volumeSupportScore, analysis.volumeSignal.label]
     ];
     elements.signalSummary.innerHTML = signalItems
-      .map(([label, value]) => {
+      .map(([label, value, customText]) => {
         const status = scoreState(value);
-        const text = Number.isFinite(value) ? scoreLabel(value) : "Not enough data";
+        const text = Number.isFinite(value) ? customText || scoreLabel(value) : "Not enough data";
         return `<span class="signal-pill ${status === "good" ? "" : status}">${escapeHtml(label)}: ${escapeHtml(text)}</span>`;
       })
       .join("");
@@ -534,7 +726,9 @@
   function renderChecks(data, analysis) {
     const checks = [
       { type: "momentum", title: "Is the price moving up?", score: analysis.recentTrendScore },
-      { type: "longterm", title: "Is the longer trend healthy?", score: analysis.longTermScore },
+      { type: "longterm", title: "Is it above its usual prices?", score: analysis.longTermScore },
+      { type: "market", title: "Is it beating the wider market?", score: analysis.marketComparisonScore },
+      { type: "volume", title: "Does trading support the move?", score: analysis.volumeSupportScore },
       { type: "range", title: "Is it near its yearly high?", score: analysis.rangeScore },
       { type: "stability", title: "How bumpy has the ride been?", score: analysis.stabilityScore }
     ];
@@ -542,8 +736,15 @@
     elements.checkGrid.innerHTML = checks
       .map((check) => {
         const status = scoreState(check.score);
-        const scoreText = Number.isFinite(check.score) ? `${Math.round(check.score)}/100` : "No score";
-        const statusText = !Number.isFinite(check.score)
+        const isBenchmark = check.type === "market" && data.symbol === "SPY";
+        const scoreText = isBenchmark
+          ? "Starting point"
+          : Number.isFinite(check.score)
+            ? `${Math.round(check.score)}/100`
+            : "No score";
+        const statusText = isBenchmark
+          ? "Reference"
+          : !Number.isFinite(check.score)
           ? "No data"
           : status === "good"
             ? "Strong"
@@ -551,7 +752,7 @@
               ? "Mixed"
               : "Weak";
         return `
-          <article class="check-card ${status === "good" ? "" : status}">
+          <article class="check-card ${isBenchmark ? "info" : status === "good" ? "" : status}">
             <div class="check-card-top">
               <span class="check-icon" aria-hidden="true">${icons[check.type]}</span>
               <span class="check-result">
@@ -594,7 +795,9 @@
     const low = safeNumber(market.fiftyTwoWeekLow);
     const marketCap = safeNumber(market.marketCap);
     const averageIndicator = metricStatus(scoreAboveAverage(analysis.distanceFrom50), ["Above average", "Near average", "Below average"]);
-    const rangeIndicator = metricStatus(analysis.rangeScore, ["Near high", "Middle", "Near low"]);
+    const comparisonIndicator = data.symbol === "SPY"
+      ? { status: "info", text: "Benchmark" }
+      : metricStatus(analysis.marketComparisonScore, ["Ahead", "Similar", "Behind"]);
     const returnIndicator = Number.isFinite(analysis.oneYearReturn)
       ? analysis.oneYearReturn >= 0.1
         ? { status: "good", text: "Rising" }
@@ -612,6 +815,15 @@
     const volumeText = Number.isFinite(analysis.volumeTrend)
       ? `${formatPercent(analysis.volumeTrend)} versus the previous 20 trading days.`
       : "Average number of shares traded over the latest 20 trading days.";
+    const comparisonValue = data.symbol === "SPY"
+      ? "Market benchmark"
+      : Number.isFinite(analysis.relativeOneYear)
+        ? formatPercent(analysis.relativeOneYear)
+        : formatPercent(analysis.relativeThreeMonth);
+    const comparisonPeriod = Number.isFinite(analysis.relativeOneYear) ? "one year" : "three months";
+    const comparisonText = data.symbol === "SPY"
+      ? "SPY is used as the wider-market starting point for every comparison."
+      : `How much this investment led or lagged the S&P 500 over ${comparisonPeriod}.`;
 
     const sizeOrAverage = Number.isFinite(marketCap)
       ? metric("Company value", "Market capitalization", formatCompactCurrency(marketCap, currency), "The market's total value for all of the company's shares.", { status: "info", text: "Company size" })
@@ -620,9 +832,9 @@
     const items = [
       sizeOrAverage,
       metric("52-week price range", "Daily highs and lows", `${formatCurrency(low, currency, 0)} – ${formatCurrency(high, currency, 0)}`, "The lowest and highest traded prices in the available year.", { status: "info", text: "Year context" }),
-      metric("Distance from yearly high", "Price strength", `${formatUnsignedPercent(analysis.distanceFromHigh)} below`, "A smaller gap means the price is closer to its strongest point of the year.", rangeIndicator),
       metric("One-year price change", "Longer direction", formatPercent(analysis.oneYearReturn), "How the daily closing price moved over roughly one year.", returnIndicator),
-      metric("Average daily volume", "Latest 20 days", `${formatCompactNumber(analysis.recentVolume)} shares`, volumeText, { status: "info", text: "Activity" }),
+      metric("Compared with S&P 500", "Wider market", comparisonValue, comparisonText, comparisonIndicator),
+      metric("Average daily volume", "Latest 20 days", `${formatCompactNumber(analysis.recentVolume)} shares`, volumeText, metricStatus(analysis.volumeSupportScore, ["Supports move", "Mixed", "Warning"])),
       metric("Typical daily move", "Average change", formatUnsignedPercent(analysis.typicalDailyMove), "The average up-or-down movement on a normal trading day.", movementIndicator)
     ];
 
@@ -635,14 +847,24 @@
     const cautions = [];
 
     if (Number.isFinite(analysis.threeMonthReturn)) {
-      if (analysis.threeMonthReturn >= 0.05) positives.push(`The price rose ${formatPercent(analysis.threeMonthReturn)} over three months.`);
-      else if (analysis.threeMonthReturn < -0.05) cautions.push(`The price fell ${formatPercent(analysis.threeMonthReturn)} over three months.`);
+      if (analysis.threeMonthReturn >= 0.05) positives.push(`The price rose ${formatUnsignedPercent(analysis.threeMonthReturn)} over three months.`);
+      else if (analysis.threeMonthReturn < -0.05) cautions.push(`The price fell ${formatUnsignedPercent(analysis.threeMonthReturn)} over three months.`);
       else cautions.push("The three-month price direction was mostly flat.");
     }
 
     if (Number.isFinite(analysis.oneYearReturn)) {
       if (analysis.oneYearReturn >= 0.1) positives.push(`The one-year price change was ${formatPercent(analysis.oneYearReturn)}.`);
-      else if (analysis.oneYearReturn < -0.1) cautions.push(`The one-year price change was ${formatPercent(analysis.oneYearReturn)}.`);
+      else if (analysis.oneYearReturn < -0.1) cautions.push(`The price fell ${formatUnsignedPercent(analysis.oneYearReturn)} over one year.`);
+    }
+
+    if (data.symbol !== "SPY" && Number.isFinite(analysis.relativeOneYear)) {
+      if (analysis.relativeOneYear >= 0.03) positives.push(`It beat the S&P 500 by ${formatUnsignedPercent(analysis.relativeOneYear)} over one year.`);
+      else if (analysis.relativeOneYear <= -0.03) cautions.push(`It trailed the S&P 500 by ${formatUnsignedPercent(analysis.relativeOneYear)} over one year.`);
+    }
+
+    if (Number.isFinite(analysis.volumeSupportScore)) {
+      if (analysis.volumeSupportScore >= 67) positives.push(`Recent trading activity gave the price move support: ${analysis.volumeSignal.label.toLowerCase()}.`);
+      else if (analysis.volumeSupportScore < 43) cautions.push(`Recent trading activity showed caution: ${analysis.volumeSignal.label.toLowerCase()}.`);
     }
 
     if (Number.isFinite(analysis.distanceFrom50)) {
@@ -661,7 +883,7 @@
     }
 
     if (Number.isFinite(analysis.drawdown) && analysis.drawdown <= -0.25) {
-      cautions.push(`The price experienced a ${formatPercent(analysis.drawdown, 0)} fall from a recent high.`);
+      cautions.push(`The price experienced a ${formatUnsignedPercent(analysis.drawdown, 0)} fall from a recent high.`);
     }
 
     const positiveFallbacks = [
@@ -688,6 +910,197 @@
     const reasons = buildReasons(data, analysis);
     elements.positiveList.innerHTML = reasons.positives.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
     elements.cautionList.innerHTML = reasons.cautions.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
+  }
+
+  const contextLabels = {
+    dividends: "Show dividends",
+    news: "Show recent news",
+    risks: "Show company risks"
+  };
+
+  function contextElement(type) {
+    if (type === "dividends") return elements.dividendResult;
+    if (type === "news") return elements.newsResult;
+    return elements.riskResult;
+  }
+
+  function safeExternalUrl(value) {
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function humanizeKey(value) {
+    const text = String(value || "").replaceAll("_", " ").replace(/\s+/g, " ").trim();
+    if (!text) return "Reported risk";
+    return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function resetContextPanels() {
+    Object.entries(contextLabels).forEach(([type, label]) => {
+      const result = contextElement(type);
+      result.removeAttribute("aria-busy");
+      result.innerHTML = `<button class="context-load" type="button" data-context="${type}">${label}</button>`;
+    });
+  }
+
+  async function dividendContext(data, onWait) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
+    const payload = await polygonRequest(
+      "/stocks/v1/dividends",
+      {
+        ticker: data.symbol,
+        "ex_dividend_date.gte": isoDate(start),
+        "ex_dividend_date.lte": isoDate(end),
+        limit: 100,
+        sort: "ex_dividend_date.desc"
+      },
+      true,
+      { root: polygonExtraApiRoot, onWait }
+    );
+    const payments = (payload?.results || [])
+      .filter((item) => item.ex_dividend_date)
+      .sort((left, right) => String(right.ex_dividend_date).localeCompare(String(left.ex_dividend_date)));
+    if (!payments.length) {
+      return `<div class="context-empty"><strong>No cash dividend found</strong><span>No payment was listed during the past year. Some companies and growth funds do not pay dividends.</span></div>`;
+    }
+
+    const annualAmount = payments.reduce((total, item) => {
+      const amount = safeNumber(item.split_adjusted_cash_amount ?? item.cash_amount);
+      return total + (amount || 0);
+    }, 0);
+    const currentPrice = safeNumber(data.market?.currentPrice);
+    const dividendYield = currentPrice ? annualAmount / currentPrice : null;
+    const currency = String(payments[0].currency || data.currency || "USD").toUpperCase();
+    const recentPayments = payments.slice(0, 3).map((item) => {
+      const amount = safeNumber(item.split_adjusted_cash_amount ?? item.cash_amount);
+      return `<li><span>${escapeHtml(formatDate(item.ex_dividend_date))}</span><strong>${escapeHtml(formatCurrency(amount, currency))} per share</strong></li>`;
+    }).join("");
+
+    return `
+      <div class="context-highlight">
+        <span>Past 12 months</span>
+        <strong>${escapeHtml(formatCurrency(annualAmount, currency))} per share</strong>
+        <small>${Number.isFinite(dividendYield) ? `${escapeHtml(formatUnsignedPercent(dividendYield))} of the current price` : "Yield could not be calculated"}</small>
+      </div>
+      <ul class="context-mini-list">${recentPayments}</ul>
+      <p class="context-disclaimer">Past payments can change and are not guaranteed.</p>
+    `;
+  }
+
+  function articleSentiment(article, symbol) {
+    const insight = (article.insights || []).find((item) => String(item.ticker || "").toUpperCase() === symbol)
+      || (article.insights || [])[0];
+    const sentiment = String(insight?.sentiment || "neutral").toLowerCase();
+    if (sentiment === "positive") return { className: "positive", label: "Positive" };
+    if (sentiment === "negative") return { className: "negative", label: "Negative" };
+    return { className: "neutral", label: "Neutral" };
+  }
+
+  async function newsContext(data, onWait) {
+    const payload = await polygonRequest(
+      "/v2/reference/news",
+      { ticker: data.symbol, limit: 3, sort: "published_utc", order: "desc" },
+      true,
+      { root: polygonExtraApiRoot, onWait }
+    );
+    const articles = payload?.results || [];
+    if (!articles.length) {
+      return `<div class="context-empty"><strong>No recent headlines found</strong><span>The news feed did not return coverage for this ticker.</span></div>`;
+    }
+
+    const items = articles.map((article) => {
+      const url = safeExternalUrl(article.article_url);
+      const sentiment = articleSentiment(article, data.symbol);
+      const source = article.publisher?.name || "News source";
+      const content = `
+        <span class="news-copy"><strong>${escapeHtml(article.title || "Untitled article")}</strong><small>${escapeHtml(source)} · ${escapeHtml(formatDate(article.published_utc))}</small></span>
+        <em class="news-sentiment ${sentiment.className}">${sentiment.label}</em>
+      `;
+      return url
+        ? `<a class="context-news-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+        : `<div class="context-news-item">${content}</div>`;
+    }).join("");
+
+    return `<div class="context-news-list">${items}</div><p class="context-disclaimer">Sentiment is a news label, not a recommendation, and does not affect the price signal.</p>`;
+  }
+
+  async function riskContext(data, onWait) {
+    const payload = await polygonRequest(
+      "/stocks/filings/vX/risk-factors",
+      { ticker: data.symbol, limit: 40, sort: "filing_date.desc" },
+      true,
+      { root: polygonExtraApiRoot, onWait }
+    );
+    const results = payload?.results || [];
+    const cik = results[0]?.cik || data.cik;
+    const secUrl = cik
+      ? safeExternalUrl(`https://www.sec.gov/edgar/browse/?CIK=${encodeURIComponent(cik)}&owner=exclude&action=getcompany&type=10-K`)
+      : null;
+    if (!results.length) {
+      const link = secUrl ? `<a class="context-source-link" href="${escapeHtml(secUrl)}" target="_blank" rel="noopener noreferrer">Open official SEC filings</a>` : "";
+      return `<div class="context-empty"><strong>No company risk categories found</strong><span>ETFs and some non-US companies may not file a US 10-K.</span>${link}</div>`;
+    }
+
+    const latestFiling = results.map((item) => item.filing_date).filter(Boolean).sort().at(-1) || null;
+    const seen = new Set();
+    const risks = results
+      .filter((item) => !latestFiling || item.filing_date === latestFiling)
+      .filter((item) => {
+        const key = item.tertiary_category || item.secondary_category || item.primary_category;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 4);
+    const riskItems = risks.map((item) => {
+      const main = humanizeKey(item.tertiary_category || item.secondary_category || item.primary_category);
+      const group = humanizeKey(item.primary_category);
+      return `<li><strong>${escapeHtml(main)}</strong><span>${escapeHtml(group)}</span></li>`;
+    }).join("");
+    const sourceLink = secUrl ? `<a class="context-source-link" href="${escapeHtml(secUrl)}" target="_blank" rel="noopener noreferrer">Read the official filing</a>` : "";
+
+    return `
+      <div class="risk-summary"><span>Latest available filing${latestFiling ? ` · ${escapeHtml(formatDate(latestFiling))}` : ""}</span><ul>${riskItems}</ul></div>
+      ${sourceLink}
+      <p class="context-disclaimer">These are risks reported by the company, not an independent risk rating.</p>
+    `;
+  }
+
+  async function loadContext(type) {
+    const result = contextElement(type);
+    const data = state.data;
+    const loadId = state.loadId;
+    if (!result || !data) return;
+    result.setAttribute("aria-busy", "true");
+    result.innerHTML = `<div class="context-loading"><i aria-hidden="true"></i><span>Loading this extra information…</span></div>`;
+    const onWait = (seconds) => {
+      if (state.loadId !== loadId) return;
+      result.innerHTML = `<div class="context-loading waiting"><i aria-hidden="true"></i><span>The free data service is taking a short pause. This will continue automatically in about ${seconds} seconds.</span></div>`;
+    };
+
+    try {
+      const html = type === "dividends"
+        ? await dividendContext(data, onWait)
+        : type === "news"
+          ? await newsContext(data, onWait)
+          : await riskContext(data, onWait);
+      if (state.loadId !== loadId) return;
+      result.innerHTML = html;
+    } catch (error) {
+      if (state.loadId !== loadId) return;
+      const message = error.message?.includes("free request limit")
+        ? "The free data service is busy. Wait about one minute and try again."
+        : "This extra information is unavailable right now. The main price analysis still works.";
+      result.innerHTML = `<div class="context-empty"><strong>Could not load this section</strong><span>${escapeHtml(message)}</span><button class="context-load retry" type="button" data-context="${escapeHtml(type)}">Try again</button></div>`;
+    } finally {
+      if (state.loadId === loadId) result.removeAttribute("aria-busy");
+    }
   }
 
   function renderChart() {
@@ -792,6 +1205,7 @@
 
   function renderDashboard(data) {
     const analysis = analyze(data);
+    state.analysis = analysis;
     renderHeader(data);
     renderVerdict(data, analysis);
     renderChecks(data, analysis);
@@ -802,6 +1216,7 @@
 
   function presentStockData(data, symbol, options = {}) {
     state.data = data;
+    resetContextPanels();
     renderDashboard(data);
     elements.message.hidden = true;
     if (window.location.protocol !== "file:") {
@@ -814,6 +1229,7 @@
   }
 
   async function loadLiveStock(stock, options = {}) {
+    const loadId = ++state.loadId;
     closeSearchResults();
     elements.dashboard.classList.add("loading");
     elements.message.hidden = false;
@@ -825,13 +1241,18 @@
 
     try {
       elements.message.textContent = `Getting the latest available Polygon data for ${stock.symbol}…`;
-      const data = await fetchPolygonStock(stock);
+      const data = await fetchPolygonStock(stock, (seconds) => {
+        if (state.loadId !== loadId) return;
+        elements.message.textContent = `The free data service is taking a short pause. ${stock.symbol} will continue loading automatically in about ${seconds} seconds.`;
+      });
+      if (state.loadId !== loadId) return;
       presentStockData(data, stock.symbol, options);
     } catch (error) {
+      if (state.loadId !== loadId) return;
       elements.message.textContent = error.message;
       elements.message.hidden = false;
     } finally {
-      elements.dashboard.classList.remove("loading");
+      if (state.loadId === loadId) elements.dashboard.classList.remove("loading");
     }
   }
 
@@ -863,7 +1284,10 @@
       name: result?.name || symbol,
       exchange: result?.primary_exchange || "US",
       currency: String(result?.currency_name || "USD").toUpperCase(),
-      type: result?.type || "Stock"
+      type: result?.type || "Stock",
+      sector: friendlySecurityType(result?.type),
+      cik: result?.cik || null,
+      referenceComplete: true
     };
   }
 
@@ -899,12 +1323,17 @@
     elements.search.setAttribute("aria-expanded", "true");
 
     try {
-      const payload = await polygonRequest("/v3/reference/tickers", {
-        search: normalized,
-        active: true,
-        market: "stocks",
-        limit: 8
-      });
+      const payload = await polygonRequest(
+        "/v3/reference/tickers",
+        { search: normalized, active: true, market: "stocks", limit: 8 },
+        false,
+        {
+          onWait: (seconds) => {
+            if (requestId !== state.searchRequestId) return;
+            elements.searchResults.innerHTML = `<div class="search-empty"><strong>The free search is taking a short pause</strong><span>Results will appear automatically in about ${seconds} seconds.</span></div>`;
+          }
+        }
+      );
       if (requestId !== state.searchRequestId) return [];
       const lowered = normalized.toLowerCase();
       const matches = (payload?.results || [])
@@ -1037,6 +1466,11 @@
 
     elements.chartWrap.addEventListener("pointermove", handleChartPointer);
     elements.chartWrap.addEventListener("pointerleave", hideChartPointer);
+
+    elements.contextGrid.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-context]");
+      if (button) loadContext(button.dataset.context);
+    });
 
   }
 

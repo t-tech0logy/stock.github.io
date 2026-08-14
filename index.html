@@ -126,16 +126,16 @@
             <p class="section-label">Why this signal?</p>
             <h3 id="verdict-title">Building your plain-English view…</h3>
             <p id="verdict-summary">
-              We are checking price direction, yearly strength, and how bumpy the journey has been.
+              We are checking price direction, the wider market, trading activity, and how bumpy the journey has been.
             </p>
             <div class="signal-footer">
               <div class="signal-summary" id="signal-summary"></div>
               <div class="decision-header">
                 <div class="decision-badge wait" id="decision-badge">
-                  <span>Overall signal</span>
+                  <span>Price signal</span>
                   <strong id="decision-signal">WAIT</strong>
                 </div>
-                <p id="decision-note">Rules-based signal · not personal advice</p>
+                <p id="decision-note">Company finances are not included</p>
               </div>
             </div>
           </div>
@@ -145,7 +145,7 @@
           <div class="section-heading">
             <div>
               <p class="section-label">What we checked</p>
-              <h3 id="checks-title">Four price questions that matter</h3>
+              <h3 id="checks-title">Six simple questions that matter</h3>
             </div>
           </div>
           <div class="check-grid" id="check-grid"></div>
@@ -207,6 +207,52 @@
           </article>
         </section>
 
+        <section class="section-block context-section" aria-labelledby="context-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">Optional extra research</p>
+              <h3 id="context-title">Want a little more context?</h3>
+            </div>
+            <p>Open only what you need. These items do not change the price signal.</p>
+          </div>
+
+          <div class="context-grid" id="context-grid">
+            <article class="context-card">
+              <div class="context-card-heading">
+                <span class="context-icon income" aria-hidden="true">$</span>
+                <div><strong>Does it pay dividends?</strong><small>Cash paid to shareholders</small></div>
+              </div>
+              <p>A quick look at payments made during the past year.</p>
+              <div class="context-result" id="dividend-result" aria-live="polite">
+                <button class="context-load" type="button" data-context="dividends">Show dividends</button>
+              </div>
+            </article>
+
+            <article class="context-card">
+              <div class="context-card-heading">
+                <span class="context-icon news" aria-hidden="true">N</span>
+                <div><strong>What is happening lately?</strong><small>Three recent headlines</small></div>
+              </div>
+              <p>Read recent coverage without adding news opinions to the score.</p>
+              <div class="context-result" id="news-result" aria-live="polite">
+                <button class="context-load" type="button" data-context="news">Show recent news</button>
+              </div>
+            </article>
+
+            <article class="context-card">
+              <div class="context-card-heading">
+                <span class="context-icon risk" aria-hidden="true">!</span>
+                <div><strong>What risks does it report?</strong><small>From official company filings</small></div>
+              </div>
+              <p>See plain category names taken from the latest available filings.</p>
+              <div class="context-result" id="risk-result" aria-live="polite">
+                <button class="context-load" type="button" data-context="risks">Show company risks</button>
+              </div>
+            </article>
+          </div>
+          <p class="context-note">Extra information is loaded only when selected to respect the free data limit.</p>
+        </section>
+
         <details class="method-card">
           <summary>
             <span>
@@ -217,9 +263,10 @@
           </summary>
           <div class="method-content">
             <p>
-              The score uses free Polygon market data only. It combines recent price direction,
-              the longer trend, position inside the yearly range, and how bumpy the price has
-              been. It does not use company profit, debt, cash flow, or valuation ratios.
+              The score uses free market data only. It checks recent and longer price direction,
+              compares the result with the S&amp;P 500, checks whether trading activity supports the
+              move, and considers yearly position and price bumpiness. It does not use company
+              profit, debt, cash flow, or valuation ratios.
             </p>
             <div class="signal-thresholds" aria-label="Research signal thresholds">
               <span><strong>70–100</strong> Price BUY signal</span>
@@ -227,10 +274,12 @@
               <span><strong>Below 50</strong> Price AVOID signal</span>
             </div>
             <div class="method-weights">
-              <span><i style="--weight: 35%"></i>Recent price trend · 35%</span>
-              <span><i style="--weight: 30%"></i>Longer price trend · 30%</span>
-              <span><i style="--weight: 15%"></i>Yearly range position · 15%</span>
-              <span><i style="--weight: 20%"></i>Stability · 20%</span>
+              <span><i style="--weight: 25%"></i>Recent price trend · 25%</span>
+              <span><i style="--weight: 25%"></i>Longer price trend · 25%</span>
+              <span><i style="--weight: 20%"></i>Compared with the S&amp;P 500 · 20%</span>
+              <span><i style="--weight: 10%"></i>Trading activity · 10%</span>
+              <span><i style="--weight: 10%"></i>Yearly range position · 10%</span>
+              <span><i style="--weight: 10%"></i>Stability · 10%</span>
             </div>
             <p class="method-note">
               This is a price-movement signal, not a complete company analysis or personal
