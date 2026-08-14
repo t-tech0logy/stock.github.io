@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A calm, plain-English stock dashboard for everyday investors."
+    />
+    <meta name="plainstock-repository" content="" />
+    <title>PlainStock — Stock research without the jargon</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23c9f16c'/%3E%3Cpath d='M22 47V17h12c8 0 13 4 13 11 0 8-5 12-14 12h-3v7h-8Zm8-15h4c4 0 6-1 6-4s-2-4-6-4h-4v8Z' fill='%2317211b'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand" aria-label="PlainStock">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span>
+          <strong>PlainStock</strong>
+          <small>Stock research without the jargon</small>
+        </span>
+      </div>
+    </header>
+
+    <main>
+      <section class="search-section" aria-labelledby="search-heading">
+        <p class="eyebrow">Start with a company you know</p>
+        <h1 id="search-heading">Understand a stock in a few calm minutes.</h1>
+        <p class="search-intro">
+          Search a company and get a simple view of its business, price, and risk.
+        </p>
+
+        <div class="search-shell" id="search-shell">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.75" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <label class="sr-only" for="stock-search">Search stocks</label>
+          <input
+            id="stock-search"
+            type="search"
+            placeholder="Search Apple, Microsoft, or AAPL"
+            autocomplete="off"
+            aria-autocomplete="list"
+            aria-controls="search-results"
+            aria-expanded="false"
+          />
+          <span class="search-shortcut" aria-hidden="true">/</span>
+          <div class="search-results" id="search-results" role="listbox"></div>
+        </div>
+
+        <div class="quick-picks" aria-label="Popular stocks">
+          <span>Popular</span>
+          <button type="button" data-symbol="AAPL">AAPL</button>
+          <button type="button" data-symbol="MSFT">MSFT</button>
+          <button type="button" data-symbol="NVDA">NVDA</button>
+          <button type="button" data-symbol="AMZN">AMZN</button>
+        </div>
+        <p class="library-scope">
+          <strong id="library-count">Loading saved dashboards…</strong>
+          <span id="market-count"></span>
+        </p>
+      </section>
+
+      <div class="app-message" id="app-message" role="status" hidden></div>
+
+      <section class="dashboard" id="dashboard" aria-live="polite">
+        <div class="company-heading">
+          <div class="company-identity">
+            <div class="company-logo" id="company-logo" aria-hidden="true">A</div>
+            <div>
+              <div class="company-title-line">
+                <h2 id="company-name">Apple Inc.</h2>
+                <span class="ticker" id="company-symbol">AAPL</span>
+              </div>
+              <p id="company-meta">NASDAQ · Technology · USD</p>
+            </div>
+          </div>
+
+          <div class="price-block">
+            <span class="price" id="current-price">—</span>
+            <span class="price-change neutral" id="price-change">Loading market data…</span>
+          </div>
+        </div>
+
+        <p class="freshness" id="freshness">Getting the latest available data…</p>
+
+        <section class="verdict-card" id="verdict-card" aria-labelledby="verdict-title">
+          <div class="score-wrap">
+            <div class="score-ring" id="score-ring">
+              <div>
+                <strong id="overall-score">—</strong>
+                <span>out of 100</span>
+              </div>
+            </div>
+            <span class="confidence-badge" id="confidence-badge">Checking data</span>
+          </div>
+
+          <div class="verdict-copy">
+            <p class="section-label">Why this signal?</p>
+            <h3 id="verdict-title">Building your plain-English view…</h3>
+            <p id="verdict-summary">
+              We are checking the business, its price, and how bumpy the journey has been.
+            </p>
+            <div class="signal-footer">
+              <div class="signal-summary" id="signal-summary"></div>
+              <div class="decision-header">
+                <div class="decision-badge wait" id="decision-badge">
+                  <span>Overall signal</span>
+                  <strong id="decision-signal">WAIT</strong>
+                </div>
+                <p id="decision-note">Rules-based signal · not personal advice</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block" aria-labelledby="checks-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">What we checked</p>
+              <h3 id="checks-title">Four questions that matter</h3>
+            </div>
+          </div>
+          <div class="check-grid" id="check-grid"></div>
+        </section>
+
+        <section class="chart-card" aria-labelledby="chart-title">
+          <div class="chart-header">
+            <div>
+              <p class="section-label">Price journey</p>
+              <h3 id="chart-title">Recent performance</h3>
+            </div>
+            <div class="range-switcher" aria-label="Chart period">
+              <button type="button" data-range="30">1M</button>
+              <button type="button" data-range="90" class="active">3M</button>
+            </div>
+          </div>
+          <div class="chart-summary">
+            <strong id="period-return">—</strong>
+            <span id="period-label">over the last 3 months</span>
+          </div>
+          <div class="chart-wrap" id="chart-wrap">
+            <svg
+              id="price-chart"
+              viewBox="0 0 900 300"
+              role="img"
+              aria-label="Historical closing price chart"
+              preserveAspectRatio="none"
+            ></svg>
+            <div class="chart-tooltip" id="chart-tooltip" hidden></div>
+          </div>
+          <div class="chart-axis" id="chart-axis" aria-hidden="true"></div>
+        </section>
+
+        <section class="section-block" aria-labelledby="numbers-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">Useful numbers</p>
+              <h3 id="numbers-title">The numbers, translated</h3>
+            </div>
+            <p id="numbers-note">Only the metrics that help explain the bigger picture.</p>
+          </div>
+          <div class="metrics-grid" id="metrics-grid"></div>
+        </section>
+
+        <section class="balance-grid" aria-label="Reasons for and against further research">
+          <article class="balance-card positive-card">
+            <div class="balance-heading">
+              <span aria-hidden="true">+</span>
+              <h3>Reasons to look closer</h3>
+            </div>
+            <ul id="positive-list"></ul>
+          </article>
+          <article class="balance-card caution-card">
+            <div class="balance-heading">
+              <span aria-hidden="true">!</span>
+              <h3>Things to be careful about</h3>
+            </div>
+            <ul id="caution-list"></ul>
+          </article>
+        </section>
+
+        <details class="method-card">
+          <summary>
+            <span>
+              <small>Transparent by design</small>
+              How is this view calculated?
+            </span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </summary>
+          <div class="method-content">
+            <p>
+              The score combines business health, valuation, recent direction, and price
+              stability. When business data is unavailable, the page clearly switches to a
+              limited market-only view instead of pretending to know more than it does.
+            </p>
+            <div class="signal-thresholds" aria-label="Research signal thresholds">
+              <span><strong>70–100</strong> Buy signal</span>
+              <span><strong>50–69</strong> Wait</span>
+              <span><strong>Below 50</strong> Avoid</span>
+            </div>
+            <div class="method-weights">
+              <span><i style="--weight: 30%"></i>Business health · 30%</span>
+              <span><i style="--weight: 25%"></i>Valuation · 25%</span>
+              <span><i style="--weight: 25%"></i>Price direction · 25%</span>
+              <span><i style="--weight: 20%"></i>Stability · 20%</span>
+            </div>
+            <p class="method-note">
+              This is an educational research shortcut, not personal financial advice. Always
+              consider your goals, time horizon, and ability to handle losses.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      <details class="library-section" id="stock-library">
+        <summary class="library-summary">
+          <div>
+            <p class="section-label">Saved dashboards</p>
+            <h2 id="library-title">Browse stocks ready to open</h2>
+            <span><strong id="library-summary-count">—</strong> full dashboards saved in this project</span>
+          </div>
+          <span class="library-toggle">
+            Browse library
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </span>
+        </summary>
+        <div class="library-body">
+          <div class="library-toolbar">
+            <p>These stocks open instantly. Use the search above to find and download another SEC-listed company.</p>
+            <div class="sector-filters" id="sector-filters" aria-label="Filter saved stocks by sector"></div>
+          </div>
+          <div class="library-grid" id="library-grid"></div>
+        </div>
+      </details>
+    </main>
+
+    <footer>
+      <div>
+        <strong>PlainStock</strong>
+        <p>Built for learning, not for telling you what to buy.</p>
+      </div>
+      <p>Market data may be delayed. Always verify important numbers.</p>
+    </footer>
+
+    <script src="stocks.js"></script>
+    <script src="data/stock-catalog.js"></script>
+    <script src="data/stock-data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

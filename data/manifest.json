@@ -1,0 +1,40 @@
+{
+  "updatedAt": "2026-08-14T06:33:18.550Z",
+  "completed": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "ASML",
+    "GOOGL",
+    "META",
+    "AMZN",
+    "TSLA",
+    "WMT",
+    "KO",
+    "MCD",
+    "JPM",
+    "V",
+    "MA",
+    "BAC",
+    "JNJ",
+    "LLY",
+    "UNH",
+    "XOM",
+    "CVX",
+    "NEE",
+    "DIS",
+    "NFLX",
+    "CMCSA",
+    "COST",
+    "AMD"
+  ],
+  "refreshed": [
+    "AMD"
+  ],
+  "failed": [],
+  "sources": [
+    "SEC EDGAR",
+    "Yahoo Finance public chart endpoint (unofficial)",
+    "Nasdaq public historical endpoint (Yahoo fallback)"
+  ]
+}
