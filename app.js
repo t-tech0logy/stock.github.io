@@ -1,30 +1,17 @@
 (() => {
   "use strict";
 
-  const stocks = window.STOCK_LIBRARY || [];
-  const savedBySymbol = new Map(stocks.map((stock) => [stock.symbol, stock]));
-  const catalogBySymbol = new Map(
-    (window.STOCK_CATALOG || stocks).map((stock) => [stock.symbol, stock])
-  );
-  stocks.forEach((stock) => catalogBySymbol.set(stock.symbol, stock));
-  const marketCatalog = [...catalogBySymbol.values()].map((catalogStock) => {
-    const saved = savedBySymbol.get(catalogStock.symbol);
-    const stock = saved ? { ...catalogStock, ...saved } : catalogStock;
-    return {
-      ...stock,
-      available: Boolean(saved),
-      searchText: `${stock.symbol} ${stock.name}`.toLowerCase()
-    };
-  });
+  const polygonApiKey = String(window.PLAINSTOCK_CONFIG?.polygonApiKey || "").trim();
+  const polygonApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonApiRoot || "https://api.polygon.io").replace(/\/$/, "");
+  const searchDelay = 450;
   const state = {
     data: null,
     chartRange: 90,
     chartData: [],
     activeSearchIndex: -1,
     searchMatches: [],
-    sector: "All",
-    stockPollTimer: null,
-    stockPollTimeout: null
+    searchTimer: null,
+    searchRequestId: 0
   };
 
   const elements = {
@@ -33,9 +20,6 @@
     search: document.querySelector("#stock-search"),
     searchResults: document.querySelector("#search-results"),
     searchShell: document.querySelector("#search-shell"),
-    libraryCount: document.querySelector("#library-count"),
-    marketCount: document.querySelector("#market-count"),
-    librarySummaryCount: document.querySelector("#library-summary-count"),
     companyLogo: document.querySelector("#company-logo"),
     companyName: document.querySelector("#company-name"),
     companySymbol: document.querySelector("#company-symbol"),
@@ -62,15 +46,13 @@
     metricsGrid: document.querySelector("#metrics-grid"),
     numbersNote: document.querySelector("#numbers-note"),
     positiveList: document.querySelector("#positive-list"),
-    cautionList: document.querySelector("#caution-list"),
-    libraryGrid: document.querySelector("#library-grid"),
-    sectorFilters: document.querySelector("#sector-filters")
+    cautionList: document.querySelector("#caution-list")
   };
 
   const icons = {
-    growth: "↗",
-    cash: "$",
-    value: "◎",
+    momentum: "↗",
+    longterm: "⌁",
+    range: "↥",
     stability: "≈"
   };
 
@@ -87,6 +69,97 @@
   function safeNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function isoDate(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  async function polygonRequest(path, parameters = {}, optional = false) {
+    const url = new URL(`${polygonApiRoot}${path}`);
+    Object.entries(parameters).forEach(([name, value]) => {
+      if (value !== null && value !== undefined) url.searchParams.set(name, String(value));
+    });
+    url.searchParams.set("apiKey", polygonApiKey);
+    const response = await fetch(url.toString(), { cache: "no-store" });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // A useful HTTP error is shown below when Polygon does not return JSON.
+    }
+    if (!response.ok || payload?.status === "ERROR") {
+      if (optional && [403, 404].includes(response.status)) return null;
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("The Polygon API key is missing, invalid, or does not have access to this data.");
+      }
+      if (response.status === 429) {
+        throw new Error("Polygon's free request limit was reached. Please wait one minute and try again.");
+      }
+      throw new Error(payload?.error || payload?.message || `Polygon returned HTTP ${response.status}.`);
+    }
+    return payload;
+  }
+
+  async function fetchPolygonStock(stock) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
+    const encodedSymbol = encodeURIComponent(stock.symbol);
+    const [pricePayload, detailsPayload] = await Promise.all([
+      polygonRequest(`/v2/aggs/ticker/${encodedSymbol}/range/1/day/${isoDate(start)}/${isoDate(end)}`, {
+        adjusted: true,
+        sort: "asc",
+        limit: 5000
+      }),
+      polygonRequest(`/v3/reference/tickers/${encodedSymbol}`, {}, true).catch(() => null)
+    ]);
+    const history = (pricePayload?.results || [])
+      .map((bar) => ({
+        date: new Date(bar.t).toISOString().slice(0, 10),
+        open: safeNumber(bar.o),
+        high: safeNumber(bar.h),
+        low: safeNumber(bar.l),
+        close: safeNumber(bar.c),
+        volume: safeNumber(bar.v),
+        vwap: safeNumber(bar.vw)
+      }))
+      .filter((point) => point.date && Number.isFinite(point.close));
+    if (!history.length) throw new Error(`Polygon did not return price history for ${stock.symbol}.`);
+    const currentPrice = history.at(-1).close;
+    const details = detailsPayload?.results || {};
+    const highs = history.map((point) => point.high ?? point.close).filter(Number.isFinite);
+    const lows = history.map((point) => point.low ?? point.close).filter(Number.isFinite);
+    const currency = String(details.currency_name || stock.currency || "USD").toUpperCase();
+
+    return {
+      symbol: stock.symbol,
+      name: details.name || stock.name || stock.symbol,
+      sector: details.sic_description || stock.sector || "Other",
+      industry: details.sic_description || null,
+      exchange: details.primary_exchange || stock.exchange || "US",
+      currency,
+      filingCurrency: currency,
+      filingCurrencyToMarketRate: 1,
+      cik: stock.cik || null,
+      updatedAt: new Date().toISOString(),
+      priceAsOf: history.at(-1).date,
+      filingAsOf: null,
+      dataMode: "polygon-free-market",
+      sources: {
+        prices: "Polygon adjusted daily aggregates",
+        priceUrl: `${polygonApiRoot}/v2/aggs/ticker/${encodedSymbol}`
+      },
+      market: {
+        currentPrice,
+        previousClose: history.at(-2)?.close ?? null,
+        currency,
+        marketCap: safeNumber(details.market_cap),
+        fiftyTwoWeekHigh: Math.max(...highs),
+        fiftyTwoWeekLow: Math.min(...lows),
+        history
+      }
+    };
   }
 
   function escapeHtml(value) {
@@ -112,17 +185,26 @@
     }
   }
 
-  function formatMoney(value, currency = "USD") {
+  function formatCompactNumber(value) {
     if (!Number.isFinite(value)) return "Not available";
-    const absolute = Math.abs(value);
-    const units = [
-      [1e12, "T"],
-      [1e9, "B"],
-      [1e6, "M"]
-    ];
-    const unit = units.find(([threshold]) => absolute >= threshold);
-    if (!unit) return formatCurrency(value, currency, 0);
-    return `${value < 0 ? "−" : ""}${formatCurrency(Math.abs(value) / unit[0], currency, 1)}${unit[1]}`;
+    return new Intl.NumberFormat("en-US", {
+      notation: "compact",
+      maximumFractionDigits: 1
+    }).format(value);
+  }
+
+  function formatCompactCurrency(value, currency = "USD") {
+    if (!Number.isFinite(value)) return "Not available";
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
+        notation: "compact",
+        maximumFractionDigits: 1
+      }).format(value);
+    } catch {
+      return `${currency} ${formatCompactNumber(value)}`;
+    }
   }
 
   function formatPercent(value, digits = 1) {
@@ -134,11 +216,6 @@
   function formatUnsignedPercent(value, digits = 1) {
     if (!Number.isFinite(value)) return "Not available";
     return `${Math.abs(value * 100).toFixed(digits)}%`;
-  }
-
-  function formatRatio(value, suffix = "×") {
-    if (!Number.isFinite(value)) return "Not available";
-    return `${value.toFixed(1)}${suffix}`;
   }
 
   function formatDate(value) {
@@ -173,55 +250,6 @@
     if (status === "good") return "Looks healthy";
     if (status === "watch") return "Worth checking";
     return "Needs caution";
-  }
-
-  function scoreGrowth(growth) {
-    if (!Number.isFinite(growth)) return null;
-    if (growth >= 0.2) return 95;
-    if (growth >= 0.1) return 84;
-    if (growth >= 0.04) return 72;
-    if (growth >= 0) return 58;
-    if (growth >= -0.08) return 36;
-    return 16;
-  }
-
-  function scoreMargin(margin) {
-    if (!Number.isFinite(margin)) return null;
-    if (margin >= 0.25) return 94;
-    if (margin >= 0.15) return 82;
-    if (margin >= 0.08) return 70;
-    if (margin >= 0.02) return 55;
-    if (margin >= 0) return 42;
-    return 15;
-  }
-
-  function scorePe(peRatio) {
-    if (!Number.isFinite(peRatio) || peRatio <= 0) return null;
-    if (peRatio <= 12) return 91;
-    if (peRatio <= 18) return 83;
-    if (peRatio <= 25) return 72;
-    if (peRatio <= 35) return 54;
-    if (peRatio <= 50) return 34;
-    return 18;
-  }
-
-  function scorePriceToSales(value) {
-    if (!Number.isFinite(value) || value <= 0) return null;
-    if (value <= 1.5) return 88;
-    if (value <= 3) return 76;
-    if (value <= 6) return 57;
-    if (value <= 10) return 37;
-    return 20;
-  }
-
-  function scoreFcfYield(value) {
-    if (!Number.isFinite(value)) return null;
-    if (value >= 0.08) return 94;
-    if (value >= 0.05) return 80;
-    if (value >= 0.03) return 64;
-    if (value >= 0.01) return 46;
-    if (value >= 0) return 30;
-    return 12;
   }
 
   function calculateReturns(history) {
@@ -265,50 +293,85 @@
     return average([volatilityScore, drawdownScore]);
   }
 
-  function scoreDirection(history) {
-    if (history.length < 10) return null;
-    const recent = history.slice(-90);
-    const current = safeNumber(recent.at(-1)?.close);
-    const first = safeNumber(recent[0]?.close);
-    const movingAverage = average(recent.slice(-50).map((point) => safeNumber(point.close)));
-    if (!current || !first || !movingAverage) return null;
-    const periodReturn = current / first - 1;
-    const returnScore = clamp(50 + periodReturn * 150);
-    const averageScore = clamp(50 + (current / movingAverage - 1) * 250);
-    return average([returnScore, averageScore]);
+  function periodReturn(history, tradingDays) {
+    const period = history.slice(-(tradingDays + 1));
+    const first = safeNumber(period[0]?.close);
+    const latest = safeNumber(period.at(-1)?.close);
+    return first && latest ? latest / first - 1 : null;
+  }
+
+  function movingAverage(history, tradingDays) {
+    return average(history.slice(-tradingDays).map((point) => safeNumber(point.close)));
+  }
+
+  function scorePriceReturn(value, strongMove) {
+    if (!Number.isFinite(value)) return null;
+    if (value >= strongMove) return 92;
+    if (value >= strongMove * 0.4) return 78;
+    if (value >= 0) return 62;
+    if (value >= -strongMove * 0.4) return 42;
+    if (value >= -strongMove) return 27;
+    return 12;
+  }
+
+  function scoreAboveAverage(value) {
+    if (!Number.isFinite(value)) return null;
+    if (value >= 0.1) return 90;
+    if (value >= 0.02) return 76;
+    if (value >= -0.02) return 56;
+    if (value >= -0.08) return 36;
+    return 18;
+  }
+
+  function scoreRangePosition(value) {
+    if (!Number.isFinite(value)) return null;
+    if (value >= 0.8) return 86;
+    if (value >= 0.6) return 72;
+    if (value >= 0.4) return 56;
+    if (value >= 0.2) return 37;
+    return 18;
   }
 
   function analyze(data) {
-    const fundamentals = data.fundamentals || {};
+    const market = data.market || {};
     const history = (data.market?.history || []).filter((point) => Number.isFinite(safeNumber(point.close)));
+    const current = safeNumber(history.at(-1)?.close);
     const volatility = calculateVolatility(history.slice(-252));
     const drawdown = calculateMaxDrawdown(history.slice(-252));
-
-    const growthScore = average([
-      scoreGrowth(fundamentals.revenueGrowth),
-      scoreGrowth(fundamentals.earningsGrowth)
-    ]);
-    const cashScore = average([
-      scoreMargin(fundamentals.profitMargin),
-      scoreMargin(fundamentals.freeCashFlowMargin)
-    ]);
-    const debtScore = Number.isFinite(fundamentals.debtToAssets)
-      ? clamp(92 - fundamentals.debtToAssets * 130)
+    const oneMonthReturn = periodReturn(history, 21);
+    const threeMonthReturn = periodReturn(history, 63);
+    const oneYearReturn = periodReturn(history, 252);
+    const average50 = movingAverage(history, 50);
+    const average200 = movingAverage(history, 200);
+    const distanceFrom50 = current && average50 ? current / average50 - 1 : null;
+    const distanceFrom200 = current && average200 ? current / average200 - 1 : null;
+    const high = safeNumber(market.fiftyTwoWeekHigh);
+    const low = safeNumber(market.fiftyTwoWeekLow);
+    const distanceFromHigh = current && high ? current / high - 1 : null;
+    const rangePosition = current && high && Number.isFinite(low) && high !== low
+      ? (current - low) / (high - low)
       : null;
-    const businessScore = average([growthScore, cashScore, debtScore]);
-
-    const valuationScore = average([
-      scorePe(fundamentals.peRatio),
-      scorePriceToSales(fundamentals.priceToSales),
-      scoreFcfYield(fundamentals.freeCashFlowYield)
+    const dailyReturns = calculateReturns(history.slice(-252));
+    const typicalDailyMove = average(dailyReturns.map((value) => Math.abs(value)));
+    const recentVolume = average(history.slice(-20).map((point) => safeNumber(point.volume)));
+    const previousVolume = average(history.slice(-40, -20).map((point) => safeNumber(point.volume)));
+    const volumeTrend = recentVolume && previousVolume ? recentVolume / previousVolume - 1 : null;
+    const recentTrendScore = average([
+      scorePriceReturn(oneMonthReturn, 0.08),
+      scorePriceReturn(threeMonthReturn, 0.15),
+      scoreAboveAverage(distanceFrom50)
     ]);
-    const directionScore = scoreDirection(history);
+    const longTermScore = average([
+      scorePriceReturn(oneYearReturn, 0.25),
+      scoreAboveAverage(distanceFrom200)
+    ]);
+    const rangeScore = scoreRangePosition(rangePosition);
     const stabilityScore = scoreStability(volatility, drawdown);
 
     const weightedInputs = [
-      [businessScore, 0.3],
-      [valuationScore, 0.25],
-      [directionScore, 0.25],
+      [recentTrendScore, 0.35],
+      [longTermScore, 0.3],
+      [rangeScore, 0.15],
       [stabilityScore, 0.2]
     ].filter(([value]) => Number.isFinite(value));
     const usedWeight = weightedInputs.reduce((total, [, weight]) => total + weight, 0);
@@ -318,17 +381,25 @@
 
     return {
       overall: Number.isFinite(overall) ? Math.round(overall) : null,
-      growthScore,
-      cashScore,
-      businessScore,
-      valuationScore,
-      directionScore,
+      recentTrendScore,
+      longTermScore,
+      rangeScore,
       stabilityScore,
+      oneMonthReturn,
+      threeMonthReturn,
+      oneYearReturn,
+      average50,
+      average200,
+      distanceFrom50,
+      distanceFrom200,
+      distanceFromHigh,
+      rangePosition,
+      typicalDailyMove,
+      recentVolume,
+      volumeTrend,
       volatility,
       drawdown,
-      hasBusinessData: Number.isFinite(businessScore),
-      hasValuationData: Number.isFinite(valuationScore),
-      confidence: weightedInputs.length >= 4 ? "Full business + market view" : "Limited available-data view"
+      confidence: history.length >= 200 ? "One-year price view" : "Limited price history"
     };
   }
 
@@ -337,77 +408,69 @@
     if (!Number.isFinite(score)) {
       return {
         title: "There is not enough information yet.",
-        summary: "Run the data update again or verify this company's SEC filing coverage before drawing a conclusion."
+        summary: "The API did not return enough usable price and company information to draw a conclusion. Try again later or verify the ticker with another trusted source."
       };
     }
     if (score >= 70) {
       return {
-        title: "The evidence currently leans positive.",
-        summary: "Business strength, price, and risk clear the model's minimum bar. Check the caution list before treating this as a genuine investment candidate."
+        title: "The price trend currently looks strong.",
+        summary: "Recent and longer-term movement are supportive, and the risk level clears this price-only model's bar. Company profits, debt, and valuation are not included."
       };
     }
     if (score >= 50) {
       return {
-        title: "The evidence is mixed right now.",
-        summary: "The model does not see a strong enough risk-and-reward balance. Waiting for a better price or stronger business results may improve the setup."
+        title: "The price signals are mixed right now.",
+        summary: "Some price measures look healthy while others need patience. This free-data view cannot tell whether the underlying business is cheap or profitable."
       };
     }
     return {
-      title: "The risks currently outweigh the positives.",
-      summary: "Several important signals are weak. Avoiding the stock for now may be more sensible until the business, price, or risk picture improves."
+      title: "The price trend currently looks weak.",
+      summary: "Momentum, range position, or price stability are giving caution signals. This describes the market price only, not the quality of the company."
     };
   }
 
   function decisionFor(analysis) {
-    if (!Number.isFinite(analysis.overall) || !analysis.hasBusinessData || !analysis.hasValuationData) {
+    if (!Number.isFinite(analysis.overall)) {
       return {
         signal: "WAIT",
         status: "wait",
-        note: "Limited data"
+        note: "Not enough price data"
       };
     }
     if (analysis.overall >= 70) {
       return {
         signal: "BUY",
         status: "buy",
-        note: "Check the risks first"
+        note: "Price signal only"
       };
     }
     if (analysis.overall >= 50) {
       return {
         signal: "WAIT",
         status: "wait",
-        note: "Patience may help"
+        note: "Price signal only"
       };
     }
     return {
       signal: "AVOID",
       status: "avoid",
-      note: "Risks currently dominate"
+      note: "Price signal only"
     };
   }
 
   function descriptionForCheck(type, score, data, analysis) {
-    const fundamentals = data.fundamentals || {};
-    if (type === "growth") {
-      if (!Number.isFinite(score)) return "The SEC filing did not provide enough comparable annual figures.";
-      const revenue = formatPercent(fundamentals.revenueGrowth);
-      const earnings = formatPercent(fundamentals.earningsGrowth);
-      return `Annual revenue changed ${revenue}; profit changed ${earnings}.`;
+    if (type === "momentum") {
+      if (!Number.isFinite(score)) return "There was not enough price history to measure the recent trend.";
+      return `The price changed ${formatPercent(analysis.oneMonthReturn)} in one month and ${formatPercent(analysis.threeMonthReturn)} in three months.`;
     }
-    if (type === "cash") {
-      if (!Number.isFinite(score)) return "Cash-flow information was not consistent enough to score.";
-      if (Number.isFinite(fundamentals.freeCashFlowMargin)) {
-        return `${formatUnsignedPercent(fundamentals.freeCashFlowMargin, 1)} of sales remained as free cash after major investment spending.`;
-      }
-      return `The latest annual profit margin was ${formatPercent(fundamentals.profitMargin, 1)}.`;
+    if (type === "longterm") {
+      if (!Number.isFinite(score)) return "There was not enough history for a longer-term comparison.";
+      const relation = analysis.distanceFrom200 >= 0 ? "above" : "below";
+      return `The one-year change is ${formatPercent(analysis.oneYearReturn)}; the price is ${formatUnsignedPercent(analysis.distanceFrom200)} ${relation} its 200-day average.`;
     }
-    if (type === "value") {
-      if (!Number.isFinite(score)) return "A useful price-to-business comparison could not be calculated.";
-      const peText = Number.isFinite(fundamentals.peRatio)
-        ? `${formatRatio(fundamentals.peRatio)} annual earnings`
-        : "an unavailable earnings multiple";
-      return `The market price equals about ${peText}. Lower is generally cheaper, but quality matters.`;
+    if (type === "range") {
+      if (!Number.isFinite(score)) return "The yearly price range could not be calculated.";
+      return `The current price is ${formatUnsignedPercent(analysis.distanceFromHigh)} below its highest point of the past year.`;
     }
     if (!Number.isFinite(score)) return "There was not enough price history to judge the ride.";
     return `The annualized price variability was ${formatUnsignedPercent(analysis.volatility, 0)}, with a worst one-year slide of ${formatPercent(analysis.drawdown, 0)}.`;
@@ -430,14 +493,13 @@
     if (Number.isFinite(change)) {
       const positive = change >= 0;
       elements.priceChange.className = `price-change ${positive ? "positive" : "negative"}`;
-      elements.priceChange.textContent = `${positive ? "+" : "−"}${formatCurrency(Math.abs(change), currency)} (${formatPercent(percent)}) today`;
+      elements.priceChange.textContent = `${positive ? "+" : "−"}${formatCurrency(Math.abs(change), currency)} (${formatPercent(percent)}) in the latest session`;
     } else {
       elements.priceChange.textContent = "Current change unavailable";
     }
 
     const priceDate = data.priceAsOf ? `Price through ${formatDate(data.priceAsOf)}` : "Price date unavailable";
-    const filingDate = data.filingAsOf ? `SEC filing through ${formatDate(data.filingAsOf)}` : "filing date unavailable";
-    elements.freshness.textContent = `${priceDate} · ${filingDate}`;
+    elements.freshness.textContent = `${priceDate} · Free Polygon end-of-day market data`;
   }
 
   function renderVerdict(data, analysis) {
@@ -455,9 +517,9 @@
     elements.verdictSummary.textContent = verdict.summary;
 
     const signalItems = [
-      ["Business", analysis.businessScore],
-      ["Price", analysis.valuationScore],
-      ["Direction", analysis.directionScore],
+      ["Recent trend", analysis.recentTrendScore],
+      ["Long-term", analysis.longTermScore],
+      ["Yearly strength", analysis.rangeScore],
       ["Stability", analysis.stabilityScore]
     ];
     elements.signalSummary.innerHTML = signalItems
@@ -471,9 +533,9 @@
 
   function renderChecks(data, analysis) {
     const checks = [
-      { type: "growth", title: "Is the business growing?", score: analysis.growthScore },
-      { type: "cash", title: "Does it produce real cash?", score: analysis.cashScore },
-      { type: "value", title: "Does the price look sensible?", score: analysis.valuationScore },
+      { type: "momentum", title: "Is the price moving up?", score: analysis.recentTrendScore },
+      { type: "longterm", title: "Is the longer trend healthy?", score: analysis.longTermScore },
+      { type: "range", title: "Is it near its yearly high?", score: analysis.rangeScore },
       { type: "stability", title: "How bumpy has the ride been?", score: analysis.stabilityScore }
     ];
 
@@ -526,76 +588,76 @@
   }
 
   function renderMetrics(data, analysis) {
-    const f = data.fundamentals || {};
     const market = data.market || {};
     const currency = market.currency || data.currency || "USD";
-    const oneYearHistory = (market.history || []).slice(-252);
-    const oneYearStart = safeNumber(oneYearHistory[0]?.close);
-    const latest = safeNumber(oneYearHistory.at(-1)?.close);
-    const oneYearReturn = oneYearStart && latest ? latest / oneYearStart - 1 : null;
-    const marketCapIndicator = { status: "info", text: "Scale only" };
-    const valuationIndicator = metricStatus(scorePe(f.peRatio), ["Reasonable", "Check price", "Expensive"]);
-    const growthIndicator = metricStatus(scoreGrowth(f.revenueGrowth), ["Growing", "Slow", "Declining"]);
-    const marginIndicator = metricStatus(scoreMargin(f.profitMargin), ["Strong", "Moderate", "Thin"]);
-    const cashIndicator = metricStatus(scoreMargin(f.freeCashFlowMargin), ["Strong cash", "Some cash", "Weak cash"]);
-    const returnIndicator = Number.isFinite(oneYearReturn)
-      ? oneYearReturn >= 0.1
+    const high = safeNumber(market.fiftyTwoWeekHigh);
+    const low = safeNumber(market.fiftyTwoWeekLow);
+    const marketCap = safeNumber(market.marketCap);
+    const averageIndicator = metricStatus(scoreAboveAverage(analysis.distanceFrom50), ["Above average", "Near average", "Below average"]);
+    const rangeIndicator = metricStatus(analysis.rangeScore, ["Near high", "Middle", "Near low"]);
+    const returnIndicator = Number.isFinite(analysis.oneYearReturn)
+      ? analysis.oneYearReturn >= 0.1
         ? { status: "good", text: "Rising" }
-        : oneYearReturn >= -0.1
+        : analysis.oneYearReturn >= -0.1
           ? { status: "watch", text: "Mostly flat" }
           : { status: "weak", text: "Falling" }
       : { status: "watch", text: "No data" };
+    const movementIndicator = !Number.isFinite(analysis.typicalDailyMove)
+      ? { status: "watch", text: "No data" }
+      : analysis.typicalDailyMove <= 0.015
+        ? { status: "good", text: "Calmer" }
+        : analysis.typicalDailyMove <= 0.03
+          ? { status: "watch", text: "Moderate" }
+          : { status: "weak", text: "Bumpy" };
+    const volumeText = Number.isFinite(analysis.volumeTrend)
+      ? `${formatPercent(analysis.volumeTrend)} versus the previous 20 trading days.`
+      : "Average number of shares traded over the latest 20 trading days.";
+
+    const sizeOrAverage = Number.isFinite(marketCap)
+      ? metric("Company value", "Market capitalization", formatCompactCurrency(marketCap, currency), "The market's total value for all of the company's shares.", { status: "info", text: "Company size" })
+      : metric("Price vs usual level", "50-day average", formatPercent(analysis.distanceFrom50), `The current price compared with its ${formatCurrency(analysis.average50, currency)} 50-day average.`, averageIndicator);
 
     const items = [
-      metric("Company value", "Price + SEC", formatMoney(f.marketCap, currency), "Company size is context, not automatically good or bad.", marketCapIndicator),
-      metric("Price vs annual profit", "Price + SEC", formatRatio(f.peRatio), "How much investors pay for one dollar of annual profit.", valuationIndicator),
-      metric("Annual sales growth", "SEC", formatPercent(f.revenueGrowth), "Change in reported sales versus the previous year.", growthIndicator),
-      metric("Profit kept from sales", "SEC", Number.isFinite(f.profitMargin) ? formatUnsignedPercent(f.profitMargin) : "Not available", "The share of sales remaining after all reported costs.", marginIndicator),
-      metric("Free cash generated", "SEC", formatMoney(f.freeCashFlow, currency), "Cash left after major property and equipment spending.", cashIndicator),
-      metric("One-year price change", "Price", formatPercent(oneYearReturn), "How the saved market price moved over roughly one year.", returnIndicator)
+      sizeOrAverage,
+      metric("52-week price range", "Daily highs and lows", `${formatCurrency(low, currency, 0)} – ${formatCurrency(high, currency, 0)}`, "The lowest and highest traded prices in the available year.", { status: "info", text: "Year context" }),
+      metric("Distance from yearly high", "Price strength", `${formatUnsignedPercent(analysis.distanceFromHigh)} below`, "A smaller gap means the price is closer to its strongest point of the year.", rangeIndicator),
+      metric("One-year price change", "Longer direction", formatPercent(analysis.oneYearReturn), "How the daily closing price moved over roughly one year.", returnIndicator),
+      metric("Average daily volume", "Latest 20 days", `${formatCompactNumber(analysis.recentVolume)} shares`, volumeText, { status: "info", text: "Activity" }),
+      metric("Typical daily move", "Average change", formatUnsignedPercent(analysis.typicalDailyMove), "The average up-or-down movement on a normal trading day.", movementIndicator)
     ];
 
     elements.metricsGrid.innerHTML = items.join("");
-    elements.numbersNote.textContent = analysis.hasBusinessData
-      ? "Official filing figures combined with the saved market price."
-      : "Some SEC values were unavailable, so treat this as a limited view.";
+    elements.numbersNote.textContent = "Calculated from free Polygon daily price and volume data. No paid financial figures used.";
   }
 
   function buildReasons(data, analysis) {
-    const f = data.fundamentals || {};
     const positives = [];
     const cautions = [];
 
-    if (Number.isFinite(f.revenueGrowth)) {
-      if (f.revenueGrowth > 0.05) positives.push(`Annual sales grew ${formatPercent(f.revenueGrowth)}.`);
-      else if (f.revenueGrowth < 0) cautions.push(`Annual sales declined ${formatPercent(f.revenueGrowth)}.`);
-      else cautions.push("Annual sales growth was modest.");
+    if (Number.isFinite(analysis.threeMonthReturn)) {
+      if (analysis.threeMonthReturn >= 0.05) positives.push(`The price rose ${formatPercent(analysis.threeMonthReturn)} over three months.`);
+      else if (analysis.threeMonthReturn < -0.05) cautions.push(`The price fell ${formatPercent(analysis.threeMonthReturn)} over three months.`);
+      else cautions.push("The three-month price direction was mostly flat.");
     }
 
-    if (Number.isFinite(f.profitMargin)) {
-      if (f.profitMargin >= 0.12) positives.push(`The company kept ${formatPercent(f.profitMargin, 1).replace("+", "")} of sales as profit.`);
-      else if (f.profitMargin < 0) cautions.push("The company reported an annual loss.");
-      else cautions.push("The reported profit cushion was relatively thin.");
+    if (Number.isFinite(analysis.oneYearReturn)) {
+      if (analysis.oneYearReturn >= 0.1) positives.push(`The one-year price change was ${formatPercent(analysis.oneYearReturn)}.`);
+      else if (analysis.oneYearReturn < -0.1) cautions.push(`The one-year price change was ${formatPercent(analysis.oneYearReturn)}.`);
     }
 
-    if (Number.isFinite(f.freeCashFlow)) {
-      if (f.freeCashFlow > 0) positives.push(`The business generated ${formatMoney(f.freeCashFlow, data.currency)} in free cash.`);
-      else cautions.push("Free cash flow was negative in the latest annual filing.");
+    if (Number.isFinite(analysis.distanceFrom50)) {
+      if (analysis.distanceFrom50 >= 0.02) positives.push(`The price was ${formatUnsignedPercent(analysis.distanceFrom50)} above its 50-day average.`);
+      else if (analysis.distanceFrom50 < -0.02) cautions.push(`The price was ${formatUnsignedPercent(analysis.distanceFrom50)} below its 50-day average.`);
     }
 
-    if (Number.isFinite(f.debtToAssets)) {
-      if (f.debtToAssets <= 0.25) positives.push("Reported debt was modest compared with total assets.");
-      else if (f.debtToAssets >= 0.5) cautions.push("Reported debt was high compared with total assets.");
+    if (Number.isFinite(analysis.rangePosition)) {
+      if (analysis.rangePosition >= 0.75) positives.push("The price was trading in the upper part of its yearly range.");
+      else if (analysis.rangePosition <= 0.3) cautions.push("The price was trading near the lower part of its yearly range.");
     }
 
-    if (Number.isFinite(f.peRatio)) {
-      if (f.peRatio <= 22 && f.peRatio > 0) positives.push(`The price was about ${formatRatio(f.peRatio)} annual profit, which is not extreme by a broad-market rule of thumb.`);
-      else if (f.peRatio > 35) cautions.push(`The price was ${formatRatio(f.peRatio)} annual profit, leaving less room for disappointing growth.`);
-    }
-
-    if (Number.isFinite(analysis.directionScore)) {
-      if (analysis.directionScore >= 67) positives.push("The recent price direction was supportive.");
-      else if (analysis.directionScore < 43) cautions.push("The recent price direction was weak.");
+    if (Number.isFinite(analysis.typicalDailyMove)) {
+      if (analysis.typicalDailyMove <= 0.015) positives.push("Typical daily price movement was relatively calm.");
+      else if (analysis.typicalDailyMove >= 0.03) cautions.push("Typical daily price movement was relatively bumpy.");
     }
 
     if (Number.isFinite(analysis.drawdown) && analysis.drawdown <= -0.25) {
@@ -603,14 +665,14 @@
     }
 
     const positiveFallbacks = [
-      "The company has enough public filing history for further research.",
-      "The underlying figures can be verified in the linked SEC data.",
-      "A full year of saved prices provides useful context."
+      "The latest end-of-day market price was available.",
+      "A full year of daily prices provides useful context.",
+      "The signal uses transparent price rules that can be checked."
     ];
     const cautionFallbacks = [
-      "A simple score cannot capture competition, management quality, or future events.",
-      "Historical results do not guarantee that the business will perform similarly next year.",
-      "Broad scoring rules can miss important differences between industries."
+      "Free price data cannot show revenue, profit, debt, or cash flow.",
+      "A rising price does not prove that the company is fairly valued.",
+      "Historical price movement does not predict what happens next."
     ];
     positiveFallbacks.forEach((reason) => {
       if (positives.length < 3 && !positives.includes(reason)) positives.push(reason);
@@ -738,30 +800,35 @@
     renderReasons(data, analysis);
   }
 
-  async function loadStock(symbol, options = {}) {
-    const normalized = String(symbol).toUpperCase();
-    elements.dashboard.classList.add("loading");
+  function presentStockData(data, symbol, options = {}) {
+    state.data = data;
+    renderDashboard(data);
     elements.message.hidden = true;
+    if (window.location.protocol !== "file:") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("symbol", symbol);
+      window.history.replaceState({}, "", url);
+    }
+    document.title = `${data.name || symbol} (${symbol}) — PlainStock`;
+    if (options.scroll) elements.dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function loadLiveStock(stock, options = {}) {
     closeSearchResults();
+    elements.dashboard.classList.add("loading");
+    elements.message.hidden = false;
+    if (!polygonApiKey) {
+      elements.message.textContent = "Live search is not connected yet. Add your Polygon key in config.js, then reload the page.";
+      elements.dashboard.classList.remove("loading");
+      return;
+    }
 
     try {
-      let data = window.STOCK_DATA?.[normalized] || null;
-      if (!data) {
-        const response = await fetch(`data/stocks/${encodeURIComponent(normalized)}.json`, { cache: "no-cache" });
-        if (!response.ok) throw new Error(`Saved data for ${normalized} was not found.`);
-        data = await response.json();
-      }
-      state.data = data;
-      renderDashboard(data);
-      if (window.location.protocol !== "file:") {
-        const url = new URL(window.location.href);
-        url.searchParams.set("symbol", normalized);
-        window.history.replaceState({}, "", url);
-      }
-      document.title = `${data.name || normalized} (${normalized}) — PlainStock`;
-      if (options.scroll) elements.dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
+      elements.message.textContent = `Getting the latest available Polygon data for ${stock.symbol}…`;
+      const data = await fetchPolygonStock(stock);
+      presentStockData(data, stock.symbol, options);
     } catch (error) {
-      elements.message.textContent = `${error.message} Run “node scripts/update-data.mjs” to rebuild the bundled SEC data.`;
+      elements.message.textContent = error.message;
       elements.message.hidden = false;
     } finally {
       elements.dashboard.classList.remove("loading");
@@ -769,14 +836,12 @@
   }
 
   function stockOption(stock, index) {
-    const details = stock.available
-      ? `${stock.symbol} · ${stock.sector} · ${stock.exchange}`
-      : `${stock.symbol} · ${stock.exchange || "SEC listed"}`;
+    const details = [stock.symbol, stock.exchange, stock.type].filter(Boolean).join(" · ");
     return `
       <button class="search-option ${index === state.activeSearchIndex ? "active" : ""}" type="button" role="option" data-symbol="${stock.symbol}" aria-selected="${index === state.activeSearchIndex}">
         <span class="mini-logo">${escapeHtml(stock.name.slice(0, 1))}</span>
         <span class="search-option-copy"><strong>${escapeHtml(stock.name)}</strong><small>${escapeHtml(details)}</small></span>
-        <span class="search-option-status ${stock.available ? "ready" : "download"}">${stock.available ? "Ready" : "Download"}</span>
+        <span class="search-option-status live">API</span>
       </button>
     `;
   }
@@ -786,107 +851,102 @@
     return /^[A-Z0-9-]{1,10}$/.test(symbol) ? symbol : null;
   }
 
-  function githubRepositoryUrl() {
-    const configured = document.querySelector('meta[name="plainstock-repository"]')?.content.trim();
-    if (configured) return configured.replace(/\/$/, "");
-    const match = window.location.hostname.match(/^([a-z0-9-]+)\.github\.io$/i);
-    if (!match) return null;
-    const owner = match[1];
-    const repository = window.location.pathname.split("/").filter(Boolean)[0] || `${owner}.github.io`;
-    return `https://github.com/${owner}/${repository}`;
-  }
-
-  function stopStockPolling() {
-    if (state.stockPollTimer) window.clearInterval(state.stockPollTimer);
-    if (state.stockPollTimeout) window.clearTimeout(state.stockPollTimeout);
-    state.stockPollTimer = null;
-    state.stockPollTimeout = null;
-  }
-
-  function reloadForStock(symbol) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("symbol", symbol);
-    window.location.assign(url.href);
-  }
-
-  function startStockPolling(symbol) {
-    stopStockPolling();
-    const check = async () => {
-      try {
-        const response = await fetch(`data/manifest.json?requested=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) return;
-        const manifest = await response.json();
-        if ((manifest.completed || []).includes(symbol)) {
-          stopStockPolling();
-          elements.message.textContent = `${symbol} is ready. Reloading its dashboard…`;
-          reloadForStock(symbol);
-        }
-      } catch {
-        // GitHub Pages may briefly serve the previous deployment; the next poll retries.
-      }
-    };
-    state.stockPollTimer = window.setInterval(check, 15_000);
-    state.stockPollTimeout = window.setTimeout(stopStockPolling, 15 * 60_000);
-    check();
-  }
-
-  function requestStockDownload(symbol) {
-    const repositoryUrl = githubRepositoryUrl();
-    closeSearchResults();
-    elements.message.hidden = false;
-    if (!repositoryUrl) {
-      elements.message.textContent = `Publish this project on GitHub Pages first, then request ${symbol} from the Refresh stock data workflow.`;
-      return;
-    }
-    window.open(`${repositoryUrl}/actions/workflows/update-data.yml`, "_blank", "noopener");
-    elements.message.textContent = `GitHub Actions opened. Enter ${symbol} in “symbol”, run the workflow, then leave this page open—it will reload automatically when the data is ready.`;
-    startStockPolling(symbol);
-  }
-
   function selectSearchStock(stock) {
     elements.search.value = stock.name;
-    if (stock.available) {
-      loadStock(stock.symbol, { scroll: true });
-    } else {
-      requestStockDownload(stock.symbol);
+    loadLiveStock(stock, { scroll: true });
+  }
+
+  function stockFromPolygon(result) {
+    const symbol = String(result?.ticker || "").toUpperCase();
+    return {
+      symbol,
+      name: result?.name || symbol,
+      exchange: result?.primary_exchange || "US",
+      currency: String(result?.currency_name || "USD").toUpperCase(),
+      type: result?.type || "Stock"
+    };
+  }
+
+  function renderSearchMatches(query, matches) {
+    const requested = requestedTicker(query);
+    elements.searchResults.innerHTML = matches.length
+      ? matches.map(stockOption).join("")
+      : `<div class="search-empty">
+          <strong>No matching stock was returned by Polygon</strong>
+          <span>${requested ? `Check that ${escapeHtml(requested)} is the correct ticker code.` : "Try a company name or exact ticker code."}</span>
+        </div>`;
+    elements.searchResults.classList.add("open");
+    elements.search.setAttribute("aria-expanded", "true");
+  }
+
+  async function runStockSearch(query, options = {}) {
+    const normalized = String(query || "").trim();
+    if (!normalized) {
+      closeSearchResults();
+      return [];
+    }
+    if (!polygonApiKey) {
+      state.searchMatches = [];
+      elements.searchResults.innerHTML = `<div class="search-empty"><strong>Live search is not connected</strong><span>Add the Polygon API key in config.js and reload.</span></div>`;
+      elements.searchResults.classList.add("open");
+      elements.search.setAttribute("aria-expanded", "true");
+      return [];
+    }
+
+    const requestId = ++state.searchRequestId;
+    elements.searchResults.innerHTML = `<div class="search-empty"><strong>Searching the live market…</strong><span>Looking up ${escapeHtml(normalized)} with Polygon.</span></div>`;
+    elements.searchResults.classList.add("open");
+    elements.search.setAttribute("aria-expanded", "true");
+
+    try {
+      const payload = await polygonRequest("/v3/reference/tickers", {
+        search: normalized,
+        active: true,
+        market: "stocks",
+        limit: 8
+      });
+      if (requestId !== state.searchRequestId) return [];
+      const lowered = normalized.toLowerCase();
+      const matches = (payload?.results || [])
+        .map(stockFromPolygon)
+        .filter((stock) => stock.symbol)
+        .sort((left, right) => {
+          const rank = (stock) => {
+            const symbol = stock.symbol.toLowerCase();
+            const name = stock.name.toLowerCase();
+            if (symbol === lowered) return 0;
+            if (symbol.startsWith(lowered)) return 1;
+            if (name.startsWith(lowered)) return 2;
+            return 3;
+          };
+          return rank(left) - rank(right) || left.symbol.localeCompare(right.symbol);
+        });
+      state.searchMatches = matches;
+      state.activeSearchIndex = -1;
+      renderSearchMatches(normalized, matches);
+      if (options.selectFirst && matches[0]) selectSearchStock(matches[0]);
+      return matches;
+    } catch (error) {
+      if (requestId !== state.searchRequestId) return [];
+      state.searchMatches = [];
+      elements.searchResults.innerHTML = `<div class="search-empty"><strong>Search could not load</strong><span>${escapeHtml(error.message)}</span></div>`;
+      elements.searchResults.classList.add("open");
+      elements.search.setAttribute("aria-expanded", "true");
+      return [];
     }
   }
 
   function searchStocks(query) {
-    const normalized = query.trim().toLowerCase();
-    const source = normalized ? marketCatalog : marketCatalog.filter((stock) => stock.available);
-    const matches = source
-      .filter((stock) => !normalized || stock.searchText.includes(normalized))
-      .sort((left, right) => {
-        const rank = (stock) => {
-          const symbol = stock.symbol.toLowerCase();
-          const name = stock.name.toLowerCase();
-          if (symbol === normalized) return 0;
-          if (symbol.startsWith(normalized)) return 1;
-          if (name.startsWith(normalized)) return 2;
-          if (name.split(/\s+/).some((word) => word.startsWith(normalized))) return 3;
-          return 4;
-        };
-        return rank(left) - rank(right)
-          || Number(right.available) - Number(left.available)
-          || left.symbol.localeCompare(right.symbol);
-      })
-      .slice(0, 8);
-    state.searchMatches = matches;
+    window.clearTimeout(state.searchTimer);
+    state.searchRequestId += 1;
+    state.searchMatches = [];
     state.activeSearchIndex = -1;
-    const requested = requestedTicker(query);
-    elements.searchResults.innerHTML = matches.length
-      ? matches.map(stockOption).join("")
-      : normalized
-        ? `<div class="search-empty">
-            <strong>${escapeHtml(query.toUpperCase())} is not downloaded yet</strong>
-            <span>${requested ? "This code is not in the current SEC catalog. Repository owners can still try the GitHub refresh workflow." : "Enter an exact ticker code to request a download."}</span>
-            ${requested ? `<button class="stock-request" type="button" data-request-symbol="${escapeHtml(requested)}">Try ${escapeHtml(requested)} via GitHub Actions</button>` : ""}
-          </div>`
-        : "";
-    const shouldOpen = matches.length > 0 || Boolean(normalized);
-    elements.searchResults.classList.toggle("open", shouldOpen);
-    elements.search.setAttribute("aria-expanded", String(shouldOpen));
+    const normalized = String(query || "").trim();
+    if (!normalized) {
+      closeSearchResults();
+      return;
+    }
+    state.searchTimer = window.setTimeout(() => runStockSearch(normalized), searchDelay);
   }
 
   function closeSearchResults() {
@@ -901,52 +961,19 @@
     active?.scrollIntoView({ block: "nearest" });
   }
 
-  function renderSectorFilters() {
-    const sectors = ["All", ...new Set(stocks.map((stock) => stock.sector))];
-    elements.sectorFilters.innerHTML = sectors
-      .map((sector) => `<button type="button" data-sector="${escapeHtml(sector)}" class="${sector === state.sector ? "active" : ""}">${escapeHtml(sector)}</button>`)
-      .join("");
-  }
-
-  function renderLibrary() {
-    const visible = state.sector === "All" ? stocks : stocks.filter((stock) => stock.sector === state.sector);
-    elements.libraryGrid.innerHTML = visible
-      .map(
-        (stock) => `
-          <button class="stock-card" type="button" data-symbol="${stock.symbol}">
-            <span class="stock-card-top">
-              <span class="mini-logo">${escapeHtml(stock.name.slice(0, 1))}</span>
-              <span class="ticker">${stock.symbol}</span>
-            </span>
-            <strong>${escapeHtml(stock.name)}</strong>
-            <small>${escapeHtml(stock.sector)} · ${escapeHtml(stock.exchange)}</small>
-          </button>
-        `
-      )
-      .join("");
-  }
-
   function bindEvents() {
     elements.search.addEventListener("input", (event) => searchStocks(event.target.value));
-    elements.search.addEventListener("focus", () => searchStocks(elements.search.value));
+    elements.search.addEventListener("focus", () => {
+      if (elements.search.value.trim()) searchStocks(elements.search.value);
+    });
     elements.search.addEventListener("keydown", (event) => {
-      if (!state.searchMatches.length) {
-        if (event.key === "Enter") {
-          const requested = requestedTicker(elements.search.value);
-          if (requested) {
-            event.preventDefault();
-            requestStockDownload(requested);
-          }
-        } else if (event.key === "Escape") {
-          closeSearchResults();
-        }
-        return;
-      }
       if (event.key === "ArrowDown") {
+        if (!state.searchMatches.length) return;
         event.preventDefault();
         state.activeSearchIndex = Math.min(state.activeSearchIndex + 1, state.searchMatches.length - 1);
         updateActiveSearch();
       } else if (event.key === "ArrowUp") {
+        if (!state.searchMatches.length) return;
         event.preventDefault();
         state.activeSearchIndex = Math.max(state.activeSearchIndex - 1, 0);
         updateActiveSearch();
@@ -956,20 +983,23 @@
         selectSearchStock(selected);
       } else if (event.key === "Enter") {
         event.preventDefault();
+        window.clearTimeout(state.searchTimer);
         const exactSymbol = requestedTicker(elements.search.value);
-        const selected = state.searchMatches.find((stock) => stock.symbol === exactSymbol) || state.searchMatches[0];
-        selectSearchStock(selected);
+        const selected = state.searchMatches.find((stock) => stock.symbol === exactSymbol)
+          || state.searchMatches[0];
+        if (selected) {
+          selectSearchStock(selected);
+        } else if (exactSymbol) {
+          loadLiveStock({ symbol: exactSymbol, name: exactSymbol, exchange: "US", currency: "USD" }, { scroll: true });
+        } else {
+          runStockSearch(elements.search.value, { selectFirst: true });
+        }
       } else if (event.key === "Escape") {
         closeSearchResults();
       }
     });
 
     elements.searchResults.addEventListener("click", (event) => {
-      const request = event.target.closest("[data-request-symbol]");
-      if (request) {
-        requestStockDownload(request.dataset.requestSymbol);
-        return;
-      }
       const option = event.target.closest("[data-symbol]");
       if (!option) return;
       const stock = state.searchMatches.find((item) => item.symbol === option.dataset.symbol);
@@ -989,7 +1019,10 @@
 
     document.querySelector(".quick-picks").addEventListener("click", (event) => {
       const button = event.target.closest("[data-symbol]");
-      if (button) loadStock(button.dataset.symbol, { scroll: true });
+      if (button) {
+        const symbol = button.dataset.symbol;
+        loadLiveStock({ symbol, name: symbol, exchange: "US", currency: "USD" }, { scroll: true });
+      }
     });
 
     document.querySelector(".range-switcher").addEventListener("click", (event) => {
@@ -1003,33 +1036,17 @@
     elements.chartWrap.addEventListener("pointermove", handleChartPointer);
     elements.chartWrap.addEventListener("pointerleave", hideChartPointer);
 
-    elements.sectorFilters.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-sector]");
-      if (!button) return;
-      state.sector = button.dataset.sector;
-      renderSectorFilters();
-      renderLibrary();
-    });
-
-    elements.libraryGrid.addEventListener("click", (event) => {
-      const card = event.target.closest("[data-symbol]");
-      if (card) loadStock(card.dataset.symbol, { scroll: true });
-    });
-
   }
 
   function initialize() {
-    elements.libraryCount.textContent = `${stocks.length} dashboards ready`;
-    elements.marketCount.textContent = ` · ${marketCatalog.length.toLocaleString("en-US")} SEC-listed stocks searchable`;
-    elements.librarySummaryCount.textContent = stocks.length.toLocaleString("en-US");
-    renderSectorFilters();
-    renderLibrary();
     bindEvents();
-    const requestedSymbol = window.location.protocol === "file:"
-      ? null
-      : new URLSearchParams(window.location.search).get("symbol")?.toUpperCase();
-    const initialSymbol = stocks.some((stock) => stock.symbol === requestedSymbol) ? requestedSymbol : "AAPL";
-    loadStock(initialSymbol);
+    const requestedSymbol = requestedTicker(new URLSearchParams(window.location.search).get("symbol")) || "AAPL";
+    loadLiveStock({
+      symbol: requestedSymbol,
+      name: requestedSymbol,
+      exchange: "US",
+      currency: "USD"
+    });
   }
 
   initialize();

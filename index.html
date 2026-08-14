@@ -7,7 +7,6 @@
       name="description"
       content="A calm, plain-English stock dashboard for everyday investors."
     />
-    <meta name="plainstock-repository" content="" />
     <title>PlainStock — Stock research without the jargon</title>
     <link
       rel="icon"
@@ -28,10 +27,10 @@
 
     <main>
       <section class="search-section" aria-labelledby="search-heading">
-        <p class="eyebrow">Start with a company you know</p>
+        <p class="eyebrow">Start with a stock or ETF you know</p>
         <h1 id="search-heading">Understand a stock in a few calm minutes.</h1>
         <p class="search-intro">
-          Search a company and get a simple view of its business, price, and risk.
+          Search by name or ticker for a simple view of price direction and risk.
         </p>
 
         <div class="search-shell" id="search-shell">
@@ -60,10 +59,7 @@
           <button type="button" data-symbol="NVDA">NVDA</button>
           <button type="button" data-symbol="AMZN">AMZN</button>
         </div>
-        <p class="library-scope">
-          <strong id="library-count">Loading saved dashboards…</strong>
-          <span id="market-count"></span>
-        </p>
+        <p class="api-scope">Live API search · no saved stock library</p>
       </section>
 
       <div class="app-message" id="app-message" role="status" hidden></div>
@@ -104,7 +100,7 @@
             <p class="section-label">Why this signal?</p>
             <h3 id="verdict-title">Building your plain-English view…</h3>
             <p id="verdict-summary">
-              We are checking the business, its price, and how bumpy the journey has been.
+              We are checking price direction, yearly strength, and how bumpy the journey has been.
             </p>
             <div class="signal-footer">
               <div class="signal-summary" id="signal-summary"></div>
@@ -123,7 +119,7 @@
           <div class="section-heading">
             <div>
               <p class="section-label">What we checked</p>
-              <h3 id="checks-title">Four questions that matter</h3>
+              <h3 id="checks-title">Four price questions that matter</h3>
             </div>
           </div>
           <div class="check-grid" id="check-grid"></div>
@@ -160,8 +156,8 @@
         <section class="section-block" aria-labelledby="numbers-title">
           <div class="section-heading">
             <div>
-              <p class="section-label">Useful numbers</p>
-              <h3 id="numbers-title">The numbers, translated</h3>
+              <p class="section-label">Useful market numbers</p>
+              <h3 id="numbers-title">The price facts, translated</h3>
             </div>
             <p id="numbers-note">Only the metrics that help explain the bigger picture.</p>
           </div>
@@ -195,49 +191,29 @@
           </summary>
           <div class="method-content">
             <p>
-              The score combines business health, valuation, recent direction, and price
-              stability. When business data is unavailable, the page clearly switches to a
-              limited market-only view instead of pretending to know more than it does.
+              The score uses free Polygon market data only. It combines recent price direction,
+              the longer trend, position inside the yearly range, and how bumpy the price has
+              been. It does not use company profit, debt, cash flow, or valuation ratios.
             </p>
             <div class="signal-thresholds" aria-label="Research signal thresholds">
-              <span><strong>70–100</strong> Buy signal</span>
-              <span><strong>50–69</strong> Wait</span>
-              <span><strong>Below 50</strong> Avoid</span>
+              <span><strong>70–100</strong> Price BUY signal</span>
+              <span><strong>50–69</strong> Price WAIT signal</span>
+              <span><strong>Below 50</strong> Price AVOID signal</span>
             </div>
             <div class="method-weights">
-              <span><i style="--weight: 30%"></i>Business health · 30%</span>
-              <span><i style="--weight: 25%"></i>Valuation · 25%</span>
-              <span><i style="--weight: 25%"></i>Price direction · 25%</span>
+              <span><i style="--weight: 35%"></i>Recent price trend · 35%</span>
+              <span><i style="--weight: 30%"></i>Longer price trend · 30%</span>
+              <span><i style="--weight: 15%"></i>Yearly range position · 15%</span>
               <span><i style="--weight: 20%"></i>Stability · 20%</span>
             </div>
             <p class="method-note">
-              This is an educational research shortcut, not personal financial advice. Always
-              consider your goals, time horizon, and ability to handle losses.
+              This is a price-movement signal, not a complete company analysis or personal
+              financial advice. Always check the business separately before making a decision.
             </p>
           </div>
         </details>
       </section>
 
-      <details class="library-section" id="stock-library">
-        <summary class="library-summary">
-          <div>
-            <p class="section-label">Saved dashboards</p>
-            <h2 id="library-title">Browse stocks ready to open</h2>
-            <span><strong id="library-summary-count">—</strong> full dashboards saved in this project</span>
-          </div>
-          <span class="library-toggle">
-            Browse library
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-          </span>
-        </summary>
-        <div class="library-body">
-          <div class="library-toolbar">
-            <p>These stocks open instantly. Use the search above to find and download another SEC-listed company.</p>
-            <div class="sector-filters" id="sector-filters" aria-label="Filter saved stocks by sector"></div>
-          </div>
-          <div class="library-grid" id="library-grid"></div>
-        </div>
-      </details>
     </main>
 
     <footer>
@@ -248,9 +224,7 @@
       <p>Market data may be delayed. Always verify important numbers.</p>
     </footer>
 
-    <script src="stocks.js"></script>
-    <script src="data/stock-catalog.js"></script>
-    <script src="data/stock-data.js"></script>
+    <script src="config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
