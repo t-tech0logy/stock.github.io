@@ -458,6 +458,11 @@ main {
   pointer-events: none;
 }
 
+.context-load:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
+
 .company-heading {
   display: flex;
   align-items: flex-end;

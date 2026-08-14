@@ -4,20 +4,28 @@
   const polygonApiKey = String(window.PLAINSTOCK_CONFIG?.polygonApiKey || "").trim();
   const polygonApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonApiRoot || "https://api.polygon.io").replace(/\/$/, "");
   const polygonExtraApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonExtraApiRoot || polygonApiRoot).replace(/\/$/, "");
-  const searchDelay = 450;
+  const searchDelay = 650;
   const freeRequestLimit = 5;
   const requestWindowMs = 60_500;
+  const memoryCacheTtlMs = 5 * 60 * 1000;
+  const defaultStockDelayMs = 3_000;
   const state = {
     data: null,
     analysis: null,
     chartRange: 90,
     chartData: [],
     benchmarkHistory: null,
+    benchmarkCachedAt: 0,
     benchmarkPromise: null,
+    stockCache: new Map(),
+    searchCache: new Map(),
     activeSearchIndex: -1,
     searchMatches: [],
     searchTimer: null,
     searchRequestId: 0,
+    selectedSearchValue: "",
+    defaultLoadTimer: null,
+    defaultLoadInProgress: false,
     loadId: 0,
     requestTimes: [],
     requestGate: Promise.resolve()
@@ -101,6 +109,24 @@
 
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  function readMemoryCache(cache, key) {
+    const entry = cache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.savedAt >= memoryCacheTtlMs) {
+      cache.delete(key);
+      return null;
+    }
+    return entry.value;
+  }
+
+  function writeMemoryCache(cache, key, value) {
+    if (!cache.has(key) && cache.size >= 50) {
+      cache.delete(cache.keys().next().value);
+    }
+    cache.set(key, { savedAt: Date.now(), value });
+    return value;
   }
 
   async function reservePolygonRequest(onWait) {
@@ -187,11 +213,14 @@
   }
 
   async function getBenchmarkHistory(start, end, onWait) {
-    if (state.benchmarkHistory?.length) return state.benchmarkHistory;
+    if (state.benchmarkHistory?.length && Date.now() - state.benchmarkCachedAt < memoryCacheTtlMs) {
+      return state.benchmarkHistory;
+    }
     if (!state.benchmarkPromise) {
       state.benchmarkPromise = fetchDailyHistory("SPY", start, end, onWait)
         .then((history) => {
           state.benchmarkHistory = history;
+          state.benchmarkCachedAt = Date.now();
           return history;
         })
         .catch(() => null)
@@ -202,28 +231,10 @@
     return state.benchmarkPromise;
   }
 
-  async function fetchPolygonStock(stock, onWait) {
-    const end = new Date();
-    const start = new Date(end);
-    start.setUTCFullYear(start.getUTCFullYear() - 1);
-    const encodedSymbol = encodeURIComponent(stock.symbol);
-    const pricePromise = fetchDailyHistory(stock.symbol, start, end, onWait);
-    const detailsPromise = stock.referenceComplete
-      ? Promise.resolve(null)
-      : polygonRequest(`/v3/reference/tickers/${encodedSymbol}`, {}, true, { onWait }).catch(() => null);
-    const benchmarkPromise = stock.symbol === "SPY"
-      ? Promise.resolve(null)
-      : getBenchmarkHistory(start, end, onWait);
-    const [history, detailsPayload, downloadedBenchmark] = await Promise.all([
-      pricePromise,
-      detailsPromise,
-      benchmarkPromise
-    ]);
-    if (!history.length) throw new Error(`Polygon did not return price history for ${stock.symbol}.`);
-    const benchmarkHistory = stock.symbol === "SPY" ? history : downloadedBenchmark;
-    if (stock.symbol === "SPY") state.benchmarkHistory = history;
-    const currentPrice = history.at(-1).close;
+  function buildStockData(stock, history, detailsPayload, benchmarkHistory) {
     const details = detailsPayload?.results || {};
+    const encodedSymbol = encodeURIComponent(stock.symbol);
+    const currentPrice = history.at(-1).close;
     const highs = history.map((point) => point.high ?? point.close).filter(Number.isFinite);
     const lows = history.map((point) => point.low ?? point.close).filter(Number.isFinite);
     const currency = String(details.currency_name || stock.currency || "USD").toUpperCase();
@@ -264,6 +275,39 @@
         history
       }
     };
+  }
+
+  async function fetchPolygonStock(stock, onWait, onPriceReady, shouldContinue) {
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
+    const encodedSymbol = encodeURIComponent(stock.symbol);
+    const history = await fetchDailyHistory(stock.symbol, start, end, onWait);
+    if (!history.length) throw new Error(`Polygon did not return price history for ${stock.symbol}.`);
+    if (typeof shouldContinue === "function" && !shouldContinue()) {
+      const cancelled = new Error("Stock load cancelled.");
+      cancelled.name = "AbortError";
+      throw cancelled;
+    }
+
+    if (typeof onPriceReady === "function") {
+      const previewBenchmark = stock.symbol === "SPY" ? history : [];
+      onPriceReady(buildStockData(stock, history, null, previewBenchmark));
+    }
+
+    const detailsPromise = stock.referenceComplete
+      ? Promise.resolve(null)
+      : polygonRequest(`/v3/reference/tickers/${encodedSymbol}`, {}, true, { onWait }).catch(() => null);
+    const benchmarkPromise = stock.symbol === "SPY"
+      ? Promise.resolve(null)
+      : getBenchmarkHistory(start, end, onWait);
+    const [detailsPayload, downloadedBenchmark] = await Promise.all([detailsPromise, benchmarkPromise]);
+    const benchmarkHistory = stock.symbol === "SPY" ? history : downloadedBenchmark;
+    if (stock.symbol === "SPY") {
+      state.benchmarkHistory = history;
+      state.benchmarkCachedAt = Date.now();
+    }
+    return buildStockData(stock, history, detailsPayload, benchmarkHistory);
   }
 
   function escapeHtml(value) {
@@ -1214,45 +1258,145 @@
     renderReasons(data, analysis);
   }
 
-  function presentStockData(data, symbol, options = {}) {
-    state.data = data;
-    resetContextPanels();
-    renderDashboard(data);
-    elements.message.hidden = true;
+  function syncPageIdentity(data, symbol) {
     if (window.location.protocol !== "file:") {
       const url = new URL(window.location.href);
       url.searchParams.set("symbol", symbol);
       window.history.replaceState({}, "", url);
     }
     document.title = `${data.name || symbol} (${symbol}) — PlainStock`;
+  }
+
+  function renderPricePreview(data, symbol, options = {}) {
+    const analysis = analyze(data);
+    const pendingChecks = [
+      ["momentum", "Is the price moving up?"],
+      ["longterm", "Is it above its usual prices?"],
+      ["market", "Is it beating the wider market?"],
+      ["volume", "Does trading support the move?"],
+      ["range", "Is it near its yearly high?"],
+      ["stability", "How bumpy has the ride been?"]
+    ];
+
+    state.data = data;
+    state.analysis = analysis;
+    elements.dashboard.hidden = false;
+    resetContextPanels();
+    renderHeader(data);
+    renderChart();
+    renderMetrics(data, analysis);
+
+    elements.scoreRing.style.setProperty("--score-angle", "0deg");
+    elements.overallScore.textContent = "—";
+    elements.confidenceBadge.textContent = "Comparing market";
+    elements.verdictTitle.textContent = "Latest price ready. Finishing the full signal…";
+    elements.verdictSummary.textContent = "The price chart is ready. We are now comparing this investment with the S&P 500 before showing BUY, WAIT, or AVOID.";
+    elements.decisionBadge.className = "decision-badge wait";
+    elements.decisionSignal.textContent = "CHECKING";
+    elements.decisionNote.textContent = "Waiting for the complete comparison";
+    elements.signalSummary.innerHTML = `<span class="signal-pill">Price loaded</span><span class="signal-pill watch">Market comparison loading</span>`;
+    elements.checkGrid.innerHTML = pendingChecks.map(([type, title]) => `
+      <article class="check-card info">
+        <div class="check-card-top">
+          <span class="check-icon" aria-hidden="true">${icons[type]}</span>
+          <span class="check-result"><strong class="check-status">Checking</strong><span class="check-score">—</span></span>
+        </div>
+        <h4>${escapeHtml(title)}</h4>
+        <p>Finishing the wider-market comparison.</p>
+      </article>
+    `).join("");
+    elements.numbersNote.textContent = "Price facts are ready. The wider-market comparison is still loading.";
+    elements.positiveList.innerHTML = "<li>Latest price and chart are ready to review.</li>";
+    elements.cautionList.innerHTML = "<li>Wait for the complete comparison before using the price signal.</li>";
+    elements.contextGrid.querySelectorAll("button").forEach((button) => {
+      button.disabled = true;
+      button.textContent = "Available in a moment";
+    });
+    syncPageIdentity(data, symbol);
     if (options.scroll) elements.dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function presentStockData(data, symbol, options = {}) {
+    state.data = data;
+    elements.dashboard.hidden = false;
+    resetContextPanels();
+    renderDashboard(data);
+    elements.message.hidden = true;
+    syncPageIdentity(data, symbol);
+    if (options.scroll) elements.dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function cancelDefaultLoad() {
+    const hadScheduledLoad = Boolean(state.defaultLoadTimer);
+    if (state.defaultLoadTimer) {
+      window.clearTimeout(state.defaultLoadTimer);
+      state.defaultLoadTimer = null;
+    }
+    if (state.defaultLoadInProgress) {
+      state.defaultLoadInProgress = false;
+      if (!state.data) {
+        state.loadId += 1;
+        elements.dashboard.classList.remove("loading");
+        elements.dashboard.hidden = true;
+        elements.message.hidden = true;
+      }
+    }
+    if (hadScheduledLoad && !state.data) elements.message.hidden = true;
+  }
+
   async function loadLiveStock(stock, options = {}) {
+    cancelDefaultLoad();
+    const symbol = String(stock.symbol || "").trim().toUpperCase();
+    if (!symbol) return;
+    const normalizedStock = { ...stock, symbol };
     const loadId = ++state.loadId;
+    state.defaultLoadInProgress = Boolean(options.isDefault);
     closeSearchResults();
+    state.selectedSearchValue = elements.search.value.trim();
+    const cachedData = readMemoryCache(state.stockCache, symbol);
+    if (cachedData) {
+      state.defaultLoadInProgress = false;
+      elements.dashboard.classList.remove("loading");
+      presentStockData(cachedData, symbol, options);
+      return;
+    }
+
+    elements.dashboard.hidden = false;
     elements.dashboard.classList.add("loading");
     elements.message.hidden = false;
     if (!polygonApiKey) {
       elements.message.textContent = "Live search is not connected yet. Add your Polygon key in config.js, then reload the page.";
       elements.dashboard.classList.remove("loading");
+      state.defaultLoadInProgress = false;
       return;
     }
 
+    let previewShown = false;
     try {
-      elements.message.textContent = `Getting the latest available Polygon data for ${stock.symbol}…`;
-      const data = await fetchPolygonStock(stock, (seconds) => {
+      elements.message.textContent = `Getting the latest available Polygon data for ${symbol}…`;
+      const data = await fetchPolygonStock(normalizedStock, (seconds) => {
         if (state.loadId !== loadId) return;
-        elements.message.textContent = `The free data service is taking a short pause. ${stock.symbol} will continue loading automatically in about ${seconds} seconds.`;
-      });
+        elements.message.textContent = `The free data service is taking a short pause. ${symbol} will continue loading automatically in about ${seconds} seconds.`;
+      }, (previewData) => {
+        if (state.loadId !== loadId) return;
+        previewShown = true;
+        renderPricePreview(previewData, symbol, options);
+        elements.dashboard.classList.remove("loading");
+        elements.message.textContent = `${symbol} price loaded. Finishing the wider-market comparison…`;
+      }, () => state.loadId === loadId);
       if (state.loadId !== loadId) return;
-      presentStockData(data, stock.symbol, options);
+      writeMemoryCache(state.stockCache, symbol, data);
+      presentStockData(data, symbol, { ...options, scroll: options.scroll && !previewShown });
     } catch (error) {
-      if (state.loadId !== loadId) return;
+      if (error.name === "AbortError" || state.loadId !== loadId) return;
       elements.message.textContent = error.message;
       elements.message.hidden = false;
+      if (!state.data) elements.dashboard.hidden = true;
     } finally {
-      if (state.loadId === loadId) elements.dashboard.classList.remove("loading");
+      if (state.loadId === loadId) {
+        state.defaultLoadInProgress = false;
+        elements.dashboard.classList.remove("loading");
+      }
     }
   }
 
@@ -1274,6 +1418,7 @@
 
   function selectSearchStock(stock) {
     elements.search.value = stock.name;
+    state.selectedSearchValue = stock.name;
     loadLiveStock(stock, { scroll: true });
   }
 
@@ -1318,6 +1463,15 @@
     }
 
     const requestId = ++state.searchRequestId;
+    const cacheKey = normalized.toLowerCase();
+    const cachedMatches = readMemoryCache(state.searchCache, cacheKey);
+    if (cachedMatches) {
+      state.searchMatches = cachedMatches;
+      state.activeSearchIndex = -1;
+      renderSearchMatches(normalized, cachedMatches);
+      if (options.selectFirst && cachedMatches[0]) selectSearchStock(cachedMatches[0]);
+      return cachedMatches;
+    }
     elements.searchResults.innerHTML = `<div class="search-empty"><strong>Searching the live market…</strong><span>Looking up ${escapeHtml(normalized)} with Polygon.</span></div>`;
     elements.searchResults.classList.add("open");
     elements.search.setAttribute("aria-expanded", "true");
@@ -1352,6 +1506,7 @@
         });
       state.searchMatches = matches;
       state.activeSearchIndex = -1;
+      writeMemoryCache(state.searchCache, cacheKey, matches);
       renderSearchMatches(normalized, matches);
       if (options.selectFirst && matches[0]) selectSearchStock(matches[0]);
       return matches;
@@ -1375,6 +1530,18 @@
       closeSearchResults();
       return;
     }
+    if (normalized.length < 2) {
+      elements.searchResults.innerHTML = `<div class="search-empty"><strong>Type one more character</strong><span>Or press Enter if ${escapeHtml(normalized.toUpperCase())} is the exact ticker.</span></div>`;
+      elements.searchResults.classList.add("open");
+      elements.search.setAttribute("aria-expanded", "true");
+      return;
+    }
+    const cachedMatches = readMemoryCache(state.searchCache, normalized.toLowerCase());
+    if (cachedMatches) {
+      state.searchMatches = cachedMatches;
+      renderSearchMatches(normalized, cachedMatches);
+      return;
+    }
     state.searchTimer = window.setTimeout(() => runStockSearch(normalized), searchDelay);
   }
 
@@ -1391,9 +1558,15 @@
   }
 
   function bindEvents() {
-    elements.search.addEventListener("input", (event) => searchStocks(event.target.value));
+    elements.search.addEventListener("input", (event) => {
+      cancelDefaultLoad();
+      state.selectedSearchValue = "";
+      searchStocks(event.target.value);
+    });
     elements.search.addEventListener("focus", () => {
-      if (elements.search.value.trim()) searchStocks(elements.search.value);
+      cancelDefaultLoad();
+      const value = elements.search.value.trim();
+      if (value && value !== state.selectedSearchValue) searchStocks(value);
     });
     elements.search.addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown") {
@@ -1452,6 +1625,7 @@
         const symbol = button.dataset.symbol;
         const name = button.dataset.name || symbol;
         elements.search.value = symbol;
+        state.selectedSearchValue = symbol;
         loadLiveStock({ symbol, name, exchange: "US", currency: "USD" }, { scroll: true });
       }
     });
@@ -1476,13 +1650,29 @@
 
   function initialize() {
     bindEvents();
-    const requestedSymbol = requestedTicker(new URLSearchParams(window.location.search).get("symbol")) || "AAPL";
-    loadLiveStock({
-      symbol: requestedSymbol,
-      name: requestedSymbol,
-      exchange: "US",
-      currency: "USD"
-    });
+    const requestedSymbol = requestedTicker(new URLSearchParams(window.location.search).get("symbol"));
+    if (requestedSymbol) {
+      loadLiveStock({
+        symbol: requestedSymbol,
+        name: requestedSymbol,
+        exchange: "US",
+        currency: "USD"
+      });
+      return;
+    }
+
+    elements.dashboard.hidden = true;
+    elements.message.hidden = false;
+    elements.message.textContent = "Choose a stock above. An Apple example will load shortly if you pause.";
+    state.defaultLoadTimer = window.setTimeout(() => {
+      state.defaultLoadTimer = null;
+      loadLiveStock({
+        symbol: "AAPL",
+        name: "Apple",
+        exchange: "US",
+        currency: "USD"
+      }, { isDefault: true });
+    }, defaultStockDelayMs);
   }
 
   initialize();
