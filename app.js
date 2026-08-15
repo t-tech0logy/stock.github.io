@@ -1037,9 +1037,44 @@
     `;
   }
 
-  function articleSentiment(article, symbol) {
+  function isFundSecurity(data) {
+    return ["ETF", "ETV", "ETN", "FUND"].includes(String(data?.type || "").toUpperCase());
+  }
+
+  function newsTitleTerms(data) {
+    const ignoredWords = new Set([
+      "class", "common", "company", "corp", "corporation", "group", "holdings", "inc", "limited",
+      "ltd", "ordinary", "plc", "shares", "stock", "the"
+    ]);
+    const nameWords = String(data?.name || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length >= 3 && !ignoredWords.has(word));
+    const terms = [];
+    if (nameWords.length) terms.push(nameWords.slice(0, Math.min(3, nameWords.length)).join(" "));
+    if (nameWords[0]?.length >= 4) terms.push(nameWords[0]);
+    const symbol = String(data?.symbol || "").toLowerCase();
+    if (symbol.length >= 2) terms.push(symbol);
+    return Array.from(new Set(terms.filter(Boolean)));
+  }
+
+  function isCompanyFocusedArticle(article, data) {
+    const symbol = String(data?.symbol || "").toUpperCase();
+    const taggedTickers = (article?.tickers || []).map((ticker) => String(ticker || "").toUpperCase());
+    const insightTickers = (article?.insights || []).map((insight) => String(insight?.ticker || "").toUpperCase());
+    const selectedTickerTagged = taggedTickers.includes(symbol) || insightTickers.includes(symbol);
+    if (!selectedTickerTagged) return false;
+
+    const title = ` ${String(article?.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+    const selectedCompanyNamed = newsTitleTerms(data).some((term) => title.includes(` ${term} `));
+    return selectedCompanyNamed;
+  }
+
+  function articleSentiment(article, symbol, allowRelated = false) {
     const insight = (article.insights || []).find((item) => String(item.ticker || "").toUpperCase() === symbol)
-      || (article.insights || [])[0];
+      || (allowRelated ? (article.insights || [])[0] : null);
     const sentiment = String(insight?.sentiment || "neutral").toLowerCase();
     if (sentiment === "positive") return { className: "positive", label: "Positive" };
     if (sentiment === "negative") return { className: "negative", label: "Negative" };
@@ -1047,20 +1082,29 @@
   }
 
   async function newsContext(data, onWait) {
+    const allowRelated = isFundSecurity(data);
     const payload = await polygonRequest(
       "/v2/reference/news",
-      { ticker: data.symbol, limit: 3, sort: "published_utc", order: "desc" },
+      { ticker: data.symbol, limit: 30, sort: "published_utc", order: "desc" },
       true,
       { root: polygonExtraApiRoot, onWait }
     );
-    const articles = payload?.results || [];
+    const candidates = payload?.results || [];
+    const articles = (allowRelated
+      ? candidates
+      : candidates.filter((article) => isCompanyFocusedArticle(article, data)))
+      .slice(0, 3);
     if (!articles.length) {
-      return `<div class="context-empty"><strong>No recent headlines found</strong><span>The news feed did not return coverage for this ticker.</span></div>`;
+      const explanation = allowRelated
+        ? "The news feed did not return recent coverage for this fund or its related investments."
+        : `The feed did not return a recent headline primarily about ${data.symbol}. Related-company stories were left out.`;
+      const heading = allowRelated ? "No recent fund news found" : "No company-specific headlines found";
+      return `<div class="context-empty"><strong>${heading}</strong><span>${escapeHtml(explanation)}</span></div>`;
     }
 
     const items = articles.map((article) => {
       const url = safeExternalUrl(article.article_url);
-      const sentiment = articleSentiment(article, data.symbol);
+      const sentiment = articleSentiment(article, data.symbol, allowRelated);
       const source = article.publisher?.name || "News source";
       const content = `
         <span class="news-copy"><strong>${escapeHtml(article.title || "Untitled article")}</strong><small>${escapeHtml(source)} · ${escapeHtml(formatDate(article.published_utc))}</small></span>
@@ -1071,7 +1115,10 @@
         : `<div class="context-news-item">${content}</div>`;
     }).join("");
 
-    return `<div class="context-news-list">${items}</div><p class="context-disclaimer">Sentiment is a news label, not a recommendation, and does not affect the price signal.</p>`;
+    const scope = allowRelated
+      ? "For funds, headlines may cover the fund itself or companies connected to it."
+      : `Only headlines focused on ${data.symbol} are shown.`;
+    return `<div class="context-news-list">${items}</div><p class="context-disclaimer">${escapeHtml(scope)} Sentiment is a news label, not a recommendation, and does not affect the price signal.</p>`;
   }
 
   async function riskContext(data, onWait) {
