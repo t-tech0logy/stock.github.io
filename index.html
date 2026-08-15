@@ -299,7 +299,110 @@
       <p>Market data may be delayed. Always verify important numbers.</p>
     </footer>
 
+    <button
+      class="assistant-launcher"
+      id="assistant-launcher"
+      type="button"
+      aria-controls="assistant-panel"
+      aria-expanded="false"
+      aria-label="Open PlainStock Assistant"
+      title="Open PlainStock Assistant"
+    >
+      <span class="assistant-launcher-icon" aria-hidden="true">
+        <i></i><i></i><i></i>
+      </span>
+      <span><strong>Ask PlainStock</strong><small>Your market research companion</small></span>
+      <span class="assistant-launcher-badge" aria-hidden="true">3 modes</span>
+    </button>
+
+    <aside class="assistant-panel" id="assistant-panel" aria-label="PlainStock assistant" hidden>
+      <header class="assistant-header">
+        <div class="assistant-identity">
+          <span class="assistant-avatar" aria-hidden="true">P<i></i></span>
+          <span><strong>PlainStock Assistant</strong><small id="assistant-status" hidden></small></span>
+        </div>
+        <div class="assistant-header-actions">
+          <button class="assistant-reset" id="assistant-reset" type="button" aria-label="Start a new conversation" title="New conversation">↻</button>
+          <button class="assistant-fullscreen-toggle" id="assistant-fullscreen-toggle" type="button" aria-label="Open assistant full screen" aria-pressed="false" title="Full screen">⛶</button>
+          <button class="assistant-close" id="assistant-close" type="button" aria-label="Close assistant">×</button>
+        </div>
+      </header>
+
+      <div class="assistant-mode-note" id="assistant-mode-note"></div>
+
+      <form class="futures-controls" id="futures-controls" hidden>
+        <div class="futures-market-choices">
+          <span>Choose a market</span>
+          <div role="group" aria-label="Suggested futures markets">
+            <button type="button" data-futures-market="ES" data-futures-label="S&amp;P 500"><strong>S&amp;P 500</strong><small>Broad US market</small></button>
+            <button type="button" data-futures-market="NQ" data-futures-label="Nasdaq 100"><strong>Nasdaq 100</strong><small>Large technology</small></button>
+            <button type="button" data-futures-market="GC" data-futures-label="Gold"><strong>Gold</strong><small>Precious metal</small></button>
+            <button type="button" data-futures-market="CL" data-futures-label="Crude Oil"><strong>Crude Oil</strong><small>Energy market</small></button>
+          </div>
+        </div>
+        <label class="futures-resolution-field">
+          <span>Time view</span>
+          <select id="futures-resolution">
+            <option value="1session">Daily — bigger picture</option>
+            <option value="1hour">Hourly — recent direction</option>
+            <option value="15min">15 min — short-term</option>
+            <option value="5min">5 min — very short-term</option>
+          </select>
+        </label>
+      </form>
+
+      <div class="assistant-messages" id="assistant-messages" role="log" aria-live="polite"></div>
+      <section class="assistant-suggestions" aria-labelledby="assistant-suggestions-label">
+        <span class="assistant-suggestions-label" id="assistant-suggestions-label">Suggested questions</span>
+        <div class="assistant-quick-actions" id="assistant-quick-actions"></div>
+      </section>
+
+      <form class="assistant-composer" id="assistant-form">
+        <label class="sr-only" for="assistant-input">Message PlainStock Assistant</label>
+        <textarea id="assistant-input" rows="1" placeholder="Ask a question…" maxlength="1600"></textarea>
+        <div class="assistant-composer-controls">
+          <div class="assistant-mode-picker" id="assistant-mode-picker">
+            <button
+              class="assistant-mode-trigger"
+              id="assistant-mode-trigger"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="assistant-mode-menu"
+            >
+              <span class="assistant-mode-trigger-icon" id="assistant-mode-trigger-icon" aria-hidden="true">✦</span>
+              <span class="assistant-mode-trigger-text">
+                <strong class="assistant-mode-trigger-label" id="assistant-mode-trigger-label">Normal</strong>
+                <small id="assistant-mode-trigger-detail">General questions</small>
+              </span>
+              <span class="assistant-mode-trigger-arrow" aria-hidden="true">⌄</span>
+            </button>
+            <div class="assistant-mode-menu" id="assistant-mode-menu" role="listbox" aria-label="Choose assistant mode" hidden>
+              <span class="assistant-mode-menu-title">Assistant mode</span>
+              <button type="button" class="active" role="option" aria-selected="true" data-assistant-mode="normal">
+                <span class="assistant-mode-icon" aria-hidden="true">✦</span>
+                <span class="assistant-mode-copy"><strong>Normal</strong><small>General questions</small></span>
+              </button>
+              <button type="button" role="option" aria-selected="false" data-assistant-mode="stock">
+                <span class="assistant-mode-icon" aria-hidden="true">↗</span>
+                <span class="assistant-mode-copy"><strong>Stock Analytics</strong><small>Selected company</small></span>
+              </button>
+              <button type="button" role="option" aria-selected="false" data-assistant-mode="futures">
+                <span class="assistant-mode-icon" aria-hidden="true">⌁</span>
+                <span class="assistant-mode-copy"><strong>Futures</strong><small>Simple trade suggestions</small></span>
+              </button>
+            </div>
+          </div>
+          <button type="submit" id="assistant-send" aria-label="Send message">
+            <span aria-hidden="true">↑</span>
+          </button>
+        </div>
+      </form>
+    </aside>
+
     <script src="config.js"></script>
+    <script src="assistant-config.js"></script>
     <script src="app.js"></script>
+    <script src="assistant.js"></script>
   </body>
 </html>

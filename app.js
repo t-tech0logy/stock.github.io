@@ -1324,6 +1324,7 @@
     elements.message.hidden = true;
     syncPageIdentity(data, symbol);
     if (options.scroll) elements.dashboard.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.dispatchEvent(new CustomEvent("plainstock:stock-update", { detail: { symbol } }));
   }
 
   function cancelDefaultLoad() {
@@ -1647,6 +1648,20 @@
     });
 
   }
+
+  window.PLAINSTOCK_DASHBOARD = Object.freeze({
+    getStockSnapshot() {
+      return state.data && state.analysis
+        ? { data: state.data, analysis: state.analysis }
+        : null;
+    },
+    getMarketApiKey() {
+      return polygonApiKey;
+    },
+    reserveMarketRequest(onWait) {
+      return reservePolygonRequest(onWait);
+    }
+  });
 
   function initialize() {
     bindEvents();
