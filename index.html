@@ -542,51 +542,6 @@
 
       <div class="assistant-mode-note" id="assistant-mode-note"></div>
 
-      <form class="futures-controls" id="futures-controls" hidden>
-        <div class="futures-market-choices">
-          <span>Choose a market</span>
-          <div role="group" aria-label="Suggested futures markets">
-            <button
-              type="button"
-              data-futures-market="ES"
-              data-futures-label="S&amp;P 500"
-            >
-              <strong>S&amp;P 500</strong><small>Broad US market</small>
-            </button>
-            <button
-              type="button"
-              data-futures-market="NQ"
-              data-futures-label="Nasdaq 100"
-            >
-              <strong>Nasdaq 100</strong><small>Large technology</small>
-            </button>
-            <button
-              type="button"
-              data-futures-market="GC"
-              data-futures-label="Gold"
-            >
-              <strong>Gold</strong><small>Precious metal</small>
-            </button>
-            <button
-              type="button"
-              data-futures-market="CL"
-              data-futures-label="Crude Oil"
-            >
-              <strong>Crude Oil</strong><small>Energy market</small>
-            </button>
-          </div>
-        </div>
-        <label class="futures-resolution-field">
-          <span>Time view</span>
-          <select id="futures-resolution">
-            <option value="1session">Daily — bigger picture</option>
-            <option value="1hour">Hourly — recent direction</option>
-            <option value="15min">15 min — short-term</option>
-            <option value="5min">5 min — very short-term</option>
-          </select>
-        </label>
-      </form>
-
       <div
         class="assistant-messages"
         id="assistant-messages"
@@ -683,18 +638,6 @@
                   ><small>Selected company</small></span
                 >
               </button>
-              <button
-                type="button"
-                role="option"
-                aria-selected="false"
-                data-assistant-mode="futures"
-              >
-                <span class="assistant-mode-icon" aria-hidden="true">⌁</span>
-                <span class="assistant-mode-copy"
-                  ><strong>Futures</strong
-                  ><small>Price conditions and risk</small></span
-                >
-              </button>
             </div>
           </div>
           <button type="submit" id="assistant-send" aria-label="Send message">
@@ -707,7 +650,7 @@
     <script src="config.js?v=20260816-test1"></script>
     <script src="assistant-config.js?v=20260816-models2"></script>
     <script src="app.js"></script>
-    <script src="assistant.js?v=20260816-available-checks3"></script>
+    <script src="assistant.js?v=20260816-two-modes4"></script>
     <script src="site-nav.js"></script>
   </body>
 </html>

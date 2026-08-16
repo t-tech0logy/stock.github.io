@@ -35,19 +35,16 @@ window.PLAINSTOCK_ASSISTANT_CONFIG = {
   geminiApiRoot: "https://generativelanguage.googleapis.com/v1beta",
   modelRoutes: {
     normal: PLAINSTOCK_MODELS_LIGHT_FIRST,
-    stock: PLAINSTOCK_MODELS_STRONG_FIRST,
-    futures: PLAINSTOCK_MODELS_STRONG_FIRST
+    stock: PLAINSTOCK_MODELS_STRONG_FIRST
   },
 
-  // Stock and Futures use three specialist skills. Normal mode remains one fast request.
+  // Stock Analytics uses three specialist checks. Normal mode remains one fast request.
   agentWorkflows: {
-    stock: true,
-    futures: true
+    stock: true
   },
   agentValidation: {
     normal: true,
-    stock: true,
-    futures: true
+    stock: true
   },
   agentRoutes: {
     specialist: PLAINSTOCK_MODELS_LIGHT_FIRST,

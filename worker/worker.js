@@ -5,9 +5,7 @@ const MARKET_PATHS = [
   /^\/v3\/reference\/tickers(?:\/[A-Z0-9.:-]+)?$/i,
   /^\/v2\/reference\/news$/i,
   /^\/stocks\/v1\/dividends$/i,
-  /^\/stocks\/filings\/vX\/risk-factors$/i,
-  /^\/futures\/v1\/contracts$/i,
-  /^\/futures\/v1\/aggs\/[A-Z0-9:._-]+$/i
+  /^\/stocks\/filings\/vX\/risk-factors$/i
 ];
 
 const ALLOWED_MARKET_PARAMETERS = new Set([

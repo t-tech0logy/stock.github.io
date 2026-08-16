@@ -12,13 +12,9 @@
   if (assistantProxyRoot && !geminiApiKeys.length) geminiApiKeys.push("__SERVER_PROXY__");
   const hasGeminiKey = geminiApiKeys.length > 0;
   const geminiApiRoot = String(config.geminiApiRoot || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-  const futuresApiRoot = String(config.futuresApiRoot || "https://api.massive.com").replace(/\/$/, "");
-  const futuresApiKey = String(config.futuresApiKey || dashboard?.getMarketApiKey?.() || "").trim();
-  const hasFuturesConnection = Boolean(marketProxyRoot || futuresApiKey);
   const defaultRoutes = {
     normal: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
-    stock: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
-    futures: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+    stock: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
   };
   const defaultAgentRoutes = {
     specialist: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
@@ -26,13 +22,11 @@
     validator: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]
   };
   const agentWorkflows = {
-    stock: config.agentWorkflows?.stock !== false,
-    futures: config.agentWorkflows?.futures !== false
+    stock: config.agentWorkflows?.stock !== false
   };
   const agentValidation = {
     normal: config.agentValidation?.normal !== false,
-    stock: config.agentValidation?.stock !== false,
-    futures: config.agentValidation?.futures !== false
+    stock: config.agentValidation?.stock !== false
   };
   const keyCooldownMs = Math.max(10_000, Number(config.keyCooldownMs) || 60_000);
   const responseCacheTtlMs = Math.max(60_000, Number(config.responseCacheTtlMs) || 15 * 60_000);
@@ -45,14 +39,13 @@
   const state = {
     mode: "normal",
     busy: false,
-    messages: { normal: [], stock: [], futures: [] },
-    transcript: { normal: [], stock: [], futures: [] },
-    suggestionsVisible: { normal: true, stock: true, futures: true },
+    messages: { normal: [], stock: [] },
+    transcript: { normal: [], stock: [] },
+    suggestionsVisible: { normal: true, stock: true },
     nextMessageId: 1,
     typingQueue: [],
     typingMessage: null,
     reduceMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false,
-    futures: null,
     lastPresentedStock: null,
     lastModel: null,
     agentActivity: ""
@@ -78,10 +71,7 @@
     quickActions: document.querySelector("#assistant-quick-actions"),
     form: document.querySelector("#assistant-form"),
     input: document.querySelector("#assistant-input"),
-    send: document.querySelector("#assistant-send"),
-    futuresControls: document.querySelector("#futures-controls"),
-    futuresResolution: document.querySelector("#futures-resolution"),
-    futuresMarkets: Array.from(document.querySelectorAll("[data-futures-market]"))
+    send: document.querySelector("#assistant-send")
   };
 
   if (!elements.panel || !elements.launcher) return;
@@ -220,19 +210,6 @@
       .toUpperCase()
       .slice(0, 320);
     if (!lead) return null;
-
-    if (mode === "futures") {
-      if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:SELL SETUP|SHORT BIAS)/.test(lead)) {
-        return { tone: "bad", label: "DOWNWARD CONDITIONS", meaning: "Recent prices are leaning downward. This describes market conditions, not a trade instruction." };
-      }
-      if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:BUY SETUP|LONG BIAS)/.test(lead)) {
-        return { tone: "good", label: "UPWARD CONDITIONS", meaning: "Recent prices are leaning upward. This describes market conditions, not a trade instruction." };
-      }
-      if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:WAIT|NO TRADE)/.test(lead)) {
-        return { tone: "warn", label: "NO CLEAR DIRECTION", meaning: "The available price evidence does not agree clearly." };
-      }
-      return null;
-    }
 
     if (mode === "stock") {
       if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*AVOID/.test(lead)) {
@@ -542,7 +519,6 @@
     state.agentActivity = busy ? label : "";
     elements.send.disabled = busy;
     elements.input.disabled = busy;
-    elements.futuresMarkets.forEach((button) => { button.disabled = busy; });
     elements.modeTrigger.disabled = busy;
     setStatus(busy ? label : state.lastModel ? "Answer ready" : hasGeminiKey ? "Research assistant ready" : "");
     elements.panel.classList.toggle("assistant-is-busy", busy);
@@ -601,11 +577,6 @@
       }
       return '<span class="assistant-context-dot stock"></span><span class="assistant-context-copy"><small>Stock Analytics</small><strong>Choose a stock above to begin</strong></span>';
     }
-    if (mode === "futures") {
-      return state.futures
-        ? `<span class="assistant-context-dot futures"></span><span class="assistant-context-copy"><small>Loaded market setup</small><strong>${escapeHtml(state.futures.marketLabel || "Selected market")} · ${escapeHtml(state.futures.analysis.direction)}</strong></span><span class="assistant-context-tag">${escapeHtml(state.futures.resolution)}</span>`
-        : '<span class="assistant-context-dot futures"></span><span class="assistant-context-copy"><small>Futures workspace</small><strong>Choose a familiar market above</strong></span>';
-    }
     return "";
   }
 
@@ -618,32 +589,18 @@
         ["Biggest risks", "What are the biggest risks?", "!"],
       ];
     }
-    if (mode === "futures") {
-      return state.futures
-        ? [
-            ["Summarize setup", "Summarize this futures setup", "◎"],
-            ["Explain targets", "Explain the target zones", "↗"],
-            ["Explain risk line", "Explain the invalidation level", "!"]
-          ]
-        : [
-            ["Which market?", "Which suggested futures market is easiest to understand?", "?"],
-            ["Target method", "How are futures target zones calculated?", "↗"],
-            ["Risk basics", "Explain futures risk simply", "!"]
-          ];
-    }
     return [
       ["Explain this dashboard", "Explain how this dashboard works", "?"],
       ["What does positive trend mean?", "What does the positive price trend mean?", "↑"],
       ["How is risk measured?", "How does PlainStock measure risk?", "!"],
-      ["Stock vs futures", "What is the difference between stocks and futures?", "⇄" ]
+      ["Price vs business", "What is the difference between price trend and business quality?", "⇄" ]
     ];
   }
 
   function renderModeUi() {
     const modeDetails = {
       normal: { label: "Normal", detail: "General questions", icon: "✦" },
-      stock: { label: "Stock Analytics", detail: "Selected company", icon: "↗" },
-      futures: { label: "Futures", detail: "Price conditions and risk", icon: "⌁" }
+      stock: { label: "Stock Analytics", detail: "Selected company", icon: "↗" }
     };
     elements.modes.forEach((button) => {
       const active = button.dataset.assistantMode === state.mode;
@@ -656,12 +613,9 @@
     const modeContext = modeDescription(state.mode);
     elements.modeNote.innerHTML = modeContext;
     elements.modeNote.hidden = !modeContext;
-    elements.futuresControls.hidden = state.mode !== "futures";
     elements.input.placeholder = state.mode === "stock"
       ? "Ask about the selected stock…"
-      : state.mode === "futures"
-        ? "Ask about the loaded setup…"
-        : "Ask a question…";
+      : "Ask a question…";
     renderQuickActions(state.mode);
     elements.suggestions.hidden = !state.suggestionsVisible[state.mode];
     renderMessages();
@@ -717,10 +671,6 @@
       }
       return;
     }
-    if (mode === "futures") {
-      addMessage("assistant", "Choose one of the familiar markets above. I’ll describe recent conditions as **UPWARD**, **DOWNWARD**, or **NO CLEAR DIRECTION**, with possible price zones, a risk line, model checks, and important events to watch.", { mode, animate: false });
-      return;
-    }
     addMessage("assistant", `
       <section class="assistant-welcome-card">
         <span>Welcome to PlainStock</span>
@@ -729,7 +679,6 @@
         <div class="assistant-welcome-points">
           <small><i aria-hidden="true">✦</i>General questions</small>
           <small><i aria-hidden="true">↗</i>Stock research</small>
-          <small><i aria-hidden="true">⌁</i>Futures conditions</small>
         </div>
       </section>
     `, { mode, trusted: true, label: "Research companion", animate: false });
@@ -824,22 +773,6 @@
     return `**Simple conclusion for ${data.symbol}: ${tone.label} price signal (${formatNumber(analysis.overall, 0)}/100).**\n\n### What supports the price signal\n${strengths.slice(0, 3).map((item) => `- ${item}`).join("\n") || "- No clear price-based strengths."}\n\n### What weakens the price signal\n${risks.slice(0, 3).map((item) => `- ${item}`).join("\n") || "- No major price warning in the current data."}\n\nUse this as a research starting point. The built-in score only measures price and trading activity; it does not judge profits, debt, cash flow, or fair value.`;
   }
 
-  function localFuturesText(prompt, futures) {
-    const { marketLabel, analysis } = futures;
-    const displayName = marketLabel || "Selected market";
-    const suggestion = futuresSuggestion(analysis.direction);
-    const lower = prompt.toLowerCase();
-    if (lower.includes("target")) {
-      return `**Possible target zones for ${displayName}**\n\n- First zone: ${formatNumber(analysis.target1, 4)} — the nearer goal.\n- Second zone: ${formatNumber(analysis.target2, 4)} — the more ambitious goal.\n- Typical recent movement: ${formatNumber(analysis.atr, 4)}.\n\nThese zones help compare possible reward with risk. They do not predict that price will reach either level.`;
-    }
-    if (lower.includes("risk") || lower.includes("invalid") || lower.includes("stop")) {
-      return Number.isFinite(analysis.invalidation)
-        ? `**Risk line for ${displayName}: ${formatNumber(analysis.invalidation, 4)}.** If price crosses that level against the suggested direction, the setup has weakened. Position size still matters because futures use leverage and price can move through a risk line quickly.`
-        : `**There is no clear risk line for ${displayName} yet.** The direction is mixed, so forcing a buy or sell setup would be less reliable. Waiting is the cleaner choice.`;
-    }
-    return `**Conditions for ${displayName}: ${suggestion.label}.** ${suggestion.reason}\n\n- Latest price: ${formatNumber(analysis.latest.close, 4)}\n- Support (price floor): ${formatNumber(analysis.support, 4)}\n- Resistance (price ceiling): ${formatNumber(analysis.resistance, 4)}\n- First possible zone: ${formatNumber(analysis.target1, 4)}\n- Risk line: ${Number.isFinite(analysis.invalidation) ? formatNumber(analysis.invalidation, 4) : "No clear level"}\n\nThis is a description of recent prices, not a trade instruction.`;
-  }
-
   function localNormalText(prompt) {
     const lower = prompt.toLowerCase();
     if (lower.includes("buy") && (lower.includes("mean") || lower.includes("signal"))) {
@@ -851,289 +784,9 @@
     if (lower.includes("risk") || lower.includes("bumpy")) {
       return "PlainStock measures price risk in two ways: **volatility**, which describes normal up-and-down movement, and **maximum drawdown**, which is the worst fall from a previous high. These describe the price journey; they do not capture every business or market risk.";
     }
-    if (lower.includes("futures") && lower.includes("stock")) {
-      return "A stock represents ownership in a company. A futures contract is an agreement linked to an asset or index for a specific contract month. Futures use leverage, expire, and can move quickly, so losses can exceed what a beginner expects. They need stricter position sizing and risk limits.";
-    }
-    if (lower.includes("which") && lower.includes("market")) {
-      return "The **S&P 500** is usually the easiest starting point because it represents a broad group of large US companies. Nasdaq 100 is more technology-heavy, Gold reacts strongly to rates and uncertainty, and Crude Oil can move sharply on supply news. Choose the market you already understand best.";
-    }
-    if (lower.includes("target")) {
-      return "The Futures mode reads recent price movement to find the direction, price floor, price ceiling, and typical movement. It turns those into **possible target zones** and a **risk line**. They are planning references, not guaranteed prices.";
-    }
     return hasGeminiKey
       ? "I can answer that with AI. Please try sending it again."
-      : "The built-in assistant can explain this dashboard, its price-trend label, price risk, stock analysis, futures market conditions, and price-zone calculations. Connect the protected assistant service later for broader questions and financial-report research.";
-  }
-
-  const futuresMarketSettings = {
-    ES: { label: "S&P 500", cycle: "quarterly" },
-    NQ: { label: "Nasdaq 100", cycle: "quarterly" },
-    GC: { label: "Gold", cycle: "gold" },
-    CL: { label: "Crude Oil", cycle: "monthly" }
-  };
-  const futuresMonthCodes = ["F", "G", "H", "J", "K", "M", "N", "Q", "U", "V", "X", "Z"];
-  const futuresContractCache = new Map();
-
-  function marketRequestUrl(path, parameters = {}) {
-    const url = marketProxyRoot
-      ? new URL(`${marketProxyRoot}/market`)
-      : new URL(`${futuresApiRoot}${path}`);
-    if (marketProxyRoot) url.searchParams.set("path", path);
-    Object.entries(parameters).forEach(([name, value]) => {
-      if (value !== null && value !== undefined) url.searchParams.set(name, String(value));
-    });
-    if (!marketProxyRoot && futuresApiKey) url.searchParams.set("apiKey", futuresApiKey);
-    return url;
-  }
-
-  function futuresSuggestion(direction) {
-    if (direction === "Bullish") return { label: "UPWARD CONDITIONS", reason: "Recent prices are leaning upward." };
-    if (direction === "Bearish") return { label: "DOWNWARD CONDITIONS", reason: "Recent prices are leaning downward." };
-    return { label: "NO CLEAR DIRECTION", reason: "Recent price signals do not agree clearly enough yet." };
-  }
-
-  function futuresTimeLabel(resolution) {
-    return ({
-      "1session": "Daily",
-      "1hour": "Hourly",
-      "15min": "15-minute",
-      "5min": "5-minute"
-    })[resolution] || "Recent";
-  }
-
-  function nextListedDelivery(date, months, rollDay) {
-    const currentMonth = date.getMonth();
-    const currentDay = date.getDate();
-    const month = months.find((candidate) => candidate > currentMonth || (candidate === currentMonth && currentDay <= rollDay));
-    return month === undefined
-      ? { month: months[0], year: date.getFullYear() + 1 }
-      : { month, year: date.getFullYear() };
-  }
-
-  function suggestedFuturesTicker(root, date = new Date()) {
-    const market = futuresMarketSettings[root];
-    if (!market) return "";
-    let delivery;
-    if (market.cycle === "quarterly") delivery = nextListedDelivery(date, [2, 5, 8, 11], 10);
-    else if (market.cycle === "gold") delivery = nextListedDelivery(date, [1, 3, 5, 7, 9, 11], 5);
-    else {
-      const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-      delivery = { month: nextMonth.getMonth(), year: nextMonth.getFullYear() };
-    }
-    return `${root}${futuresMonthCodes[delivery.month]}${String(delivery.year).slice(-2)}`;
-  }
-
-  async function resolveFuturesTicker(root) {
-    const today = new Date().toISOString().slice(0, 10);
-    const cacheKey = `${root}:${today}`;
-    if (futuresContractCache.has(cacheKey)) return futuresContractCache.get(cacheKey);
-    try {
-      if (typeof dashboard?.reserveMarketRequest === "function") {
-        await dashboard.reserveMarketRequest((seconds) => setStatus(`Free API pause · ${seconds}s`));
-      }
-      const url = marketRequestUrl("/futures/v1/contracts", {
-        product_code: root,
-        active: true,
-        type: "single",
-        date: today,
-        limit: 24,
-        sort: "last_trade_date.asc"
-      });
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error("Contract lookup unavailable.");
-      const candidates = (Array.isArray(payload?.results) ? payload.results : [])
-        .filter((contract) => contract?.ticker && contract?.product_code === root && contract?.active !== false)
-        .sort((left, right) => {
-          const leftDays = finite(left.days_to_maturity);
-          const rightDays = finite(right.days_to_maturity);
-          if (Number.isFinite(leftDays) && Number.isFinite(rightDays)) return leftDays - rightDays;
-          return String(left.last_trade_date || "").localeCompare(String(right.last_trade_date || ""));
-        });
-      const selected = candidates.find((contract) => finite(contract.days_to_maturity) >= 10) || candidates[0];
-      if (!selected?.ticker) throw new Error("No active contract found.");
-      futuresContractCache.set(cacheKey, selected.ticker);
-      return selected.ticker;
-    } catch {
-      const fallback = suggestedFuturesTicker(root);
-      if (fallback) futuresContractCache.set(cacheKey, fallback);
-      return fallback;
-    }
-  }
-
-  function normalizeFuturesTime(value) {
-    const number = Number(value);
-    if (Number.isFinite(number)) {
-      if (number > 1e17) return number / 1e6;
-      if (number > 1e14) return number / 1e3;
-      if (number > 1e11) return number;
-      if (number > 1e9) return number * 1000;
-    }
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function normalizeFuturesBars(payload) {
-    const rows = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data) ? payload.data : [];
-    return rows.map((row) => ({
-      open: finite(row.open ?? row.o),
-      high: finite(row.high ?? row.h),
-      low: finite(row.low ?? row.l),
-      close: finite(row.close ?? row.c),
-      volume: finite(row.volume ?? row.v),
-      time: normalizeFuturesTime(row.window_start ?? row.timestamp ?? row.t ?? row.session_end_date ?? row.date)
-    }))
-      .filter((bar) => [bar.open, bar.high, bar.low, bar.close].every(Number.isFinite))
-      .sort((left, right) => left.time - right.time);
-  }
-
-  function ema(values, period) {
-    if (!values.length) return null;
-    const multiplier = 2 / (period + 1);
-    let result = values[0];
-    values.slice(1).forEach((value) => {
-      result = value * multiplier + result * (1 - multiplier);
-    });
-    return result;
-  }
-
-  function analyzeFutures(candles) {
-    const latest = candles.at(-1);
-    const closes = candles.map((bar) => bar.close);
-    const ranges = candles.map((bar, index) => {
-      const previous = candles[index - 1]?.close ?? bar.open;
-      return Math.max(bar.high - bar.low, Math.abs(bar.high - previous), Math.abs(bar.low - previous));
-    });
-    const atr = average(ranges.slice(-14));
-    const ema9 = ema(closes.slice(-70), 9);
-    const ema21 = ema(closes.slice(-90), 21);
-    const recent = candles.slice(-20);
-    const support = Math.min(...recent.map((bar) => bar.low));
-    const resistance = Math.max(...recent.map((bar) => bar.high));
-    const momentum = closes.length >= 6 ? latest.close / closes.at(-6) - 1 : null;
-    const bullish = latest.close > ema9 && ema9 > ema21 && momentum >= 0;
-    const bearish = latest.close < ema9 && ema9 < ema21 && momentum <= 0;
-    const direction = bullish ? "Bullish" : bearish ? "Bearish" : "Mixed";
-    const riskDistance = Math.max(atr * 1.25, latest.close * 0.0025);
-    const invalidation = bullish
-      ? Math.min(latest.close - riskDistance, support)
-      : bearish
-        ? Math.max(latest.close + riskDistance, resistance)
-        : null;
-    const target1 = bullish ? latest.close + atr * 1.5 : bearish ? latest.close - atr * 1.5 : resistance;
-    const target2 = bullish ? latest.close + atr * 3 : bearish ? latest.close - atr * 3 : support;
-    const score = bullish
-      ? Math.min(90, 68 + Math.min(20, Math.abs(momentum || 0) * 500))
-      : bearish
-        ? Math.min(90, 68 + Math.min(20, Math.abs(momentum || 0) * 500))
-        : 45;
-    return { latest, atr, ema9, ema21, support, resistance, momentum, direction, invalidation, target1, target2, score };
-  }
-
-  function candleChartSvg(candles) {
-    const bars = candles.slice(-50);
-    if (!bars.length) return "";
-    const width = 520;
-    const height = 220;
-    const pad = 14;
-    const high = Math.max(...bars.map((bar) => bar.high));
-    const low = Math.min(...bars.map((bar) => bar.low));
-    const span = high - low || 1;
-    const slot = (width - pad * 2) / bars.length;
-    const y = (value) => pad + (1 - (value - low) / span) * (height - pad * 2);
-    const drawings = bars.map((bar, index) => {
-      const x = pad + slot * index + slot / 2;
-      const open = y(bar.open);
-      const close = y(bar.close);
-      const up = bar.close >= bar.open;
-      const top = Math.min(open, close);
-      const bodyHeight = Math.max(2, Math.abs(close - open));
-      return `<g class="${up ? "up" : "down"}"><line x1="${x.toFixed(1)}" y1="${y(bar.high).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y(bar.low).toFixed(1)}"/><rect x="${(x - slot * .28).toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(2, slot * .56).toFixed(1)}" height="${bodyHeight.toFixed(1)}" rx="1"/></g>`;
-    }).join("");
-    return `<svg class="assistant-candle-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Recent futures price chart"><line class="grid" x1="${pad}" y1="${height / 2}" x2="${width - pad}" y2="${height / 2}"/>${drawings}</svg>`;
-  }
-
-  function futuresCard(futures) {
-    const { marketLabel, resolution, candles, analysis } = futures;
-    const setupClass = analysis.direction === "Bullish" ? "buy" : analysis.direction === "Bearish" ? "avoid" : "wait";
-    const suggestion = futuresSuggestion(analysis.direction);
-    const targetLabel = analysis.direction === "Mixed" ? "Range edges" : "Target zones";
-    return `
-      <section class="assistant-analysis-card ${setupClass}">
-        <div class="assistant-analysis-heading">
-          <div><span>${escapeHtml(futuresTimeLabel(resolution))} price view</span><strong>${escapeHtml(marketLabel || "Selected market")} · ${suggestion.label}</strong></div>
-          <b><small>Clarity</small>${Math.round(analysis.score)}%</b>
-        </div>
-        ${candleChartSvg(candles)}
-        <div class="assistant-table-wrap">
-          <table><tbody>
-            <tr><th>Latest price</th><td>${formatNumber(analysis.latest.close, 4)}</td></tr>
-            <tr><th>Typical movement</th><td>${formatNumber(analysis.atr, 4)}</td></tr>
-            <tr><th>Support (price floor)</th><td>${formatNumber(analysis.support, 4)}</td></tr>
-            <tr><th>Resistance (price ceiling)</th><td>${formatNumber(analysis.resistance, 4)}</td></tr>
-            <tr><th>${targetLabel} 1</th><td>${formatNumber(analysis.target1, 4)}</td></tr>
-            <tr><th>${targetLabel} 2</th><td>${formatNumber(analysis.target2, 4)}</td></tr>
-            <tr><th>Risk line</th><td>${Number.isFinite(analysis.invalidation) ? formatNumber(analysis.invalidation, 4) : "Wait for a clear direction"}</td></tr>
-          </tbody></table>
-        </div>
-        <p class="assistant-card-note">This view uses recent price direction and typical movement. Price zones are possibilities, not predictions or trade instructions.</p>
-      </section>
-    `;
-  }
-
-  async function loadFutures(root) {
-    if (state.busy) return;
-    const market = futuresMarketSettings[root];
-    const resolution = elements.futuresResolution.value;
-    if (!market) return;
-    if (!hasFuturesConnection) {
-      addMessage("assistant", "Futures market prices are not connected yet. Configure the protected market-data service to enable this research view.");
-      return;
-    }
-    elements.futuresMarkets.forEach((button) => button.classList.toggle("active", button.dataset.futuresMarket === root));
-    setBusy(true, `Loading ${market.label} market data…`);
-    let ticker = "";
-    try {
-      ticker = await resolveFuturesTicker(root);
-      if (!ticker) throw new Error("The current market contract could not be selected automatically.");
-      if (typeof dashboard?.reserveMarketRequest === "function") {
-        await dashboard.reserveMarketRequest((seconds) => setStatus(`Free API pause · ${seconds}s`));
-      }
-      const url = marketRequestUrl(`/futures/v1/aggs/${encodeURIComponent(ticker)}`, {
-        resolution,
-        limit: resolution === "1session" ? 180 : 250
-      });
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = payload?.error || payload?.message || `Market API returned ${response.status}.`;
-        throw new Error(detail);
-      }
-      const candles = normalizeFuturesBars(payload);
-      if (candles.length < 25) throw new Error("The data provider did not return enough recent prices for this market and time view.");
-      const analysis = analyzeFutures(candles);
-      state.futures = { ticker, marketRoot: root, marketLabel: market.label, resolution, candles, analysis };
-      state.suggestionsVisible.futures = false;
-      addMessage("user", `Analyse ${market.label} using the selected time view`, { rawText: `Analyse ${market.label} using the selected time view` });
-      const suggestion = futuresSuggestion(analysis.direction);
-      addMessage("assistant", futuresCard(state.futures), { trusted: true, label: "Market conditions" });
-      addMessage("assistant", `**Conditions for ${market.label}: ${suggestion.label}.** ${suggestion.reason} ${analysis.direction === "Mixed" ? "There is not enough agreement to describe a clear direction." : `The first possible price zone is ${formatNumber(analysis.target1, 4)}, while ${formatNumber(analysis.invalidation, 4)} is the risk line that would weaken this observation.`}`);
-      renderModeUi();
-      if (hasGeminiKey) {
-        try {
-          const result = await callGemini("futures", `Give me the full validated, plain-English futures analysis for ${market.label}.`);
-          presentAiResult(result, "futures");
-        } catch {
-          addMessage("assistant", "The price-conditions view above is ready. The deeper research review is busy, so PlainStock kept the calculated zones and risk line available instead of showing a technical error.", { mode: "futures", tone: "warn" });
-        }
-      }
-    } catch (error) {
-      const rawError = String(error.message || "Market data was unavailable.");
-      const friendlyError = ticker ? rawError.replaceAll(ticker, market.label) : rawError;
-      addMessage("assistant", `**${market.label} could not load.**\n\n${friendlyError}\n\nTry another suggested market or the daily time view. Availability still depends on what your market-data plan includes.`);
-    } finally {
-      setBusy(false);
-    }
+      : "The built-in assistant can explain this dashboard, its price-trend label, price risk, and stock analysis. Connect the protected assistant service later for broader questions and financial-report research.";
   }
 
   function compactStockContext(snapshot) {
@@ -1167,26 +820,6 @@
     };
   }
 
-  function compactFuturesContext(futures) {
-    if (!futures) return null;
-    return {
-      market: futures.marketLabel || "Selected futures market",
-      timeView: futuresTimeLabel(futures.resolution),
-      priceBarCount: futures.candles.length,
-      latestPriceBar: futures.analysis.latest,
-      setup: futures.analysis.direction,
-      atr: futures.analysis.atr,
-      ema9: futures.analysis.ema9,
-      ema21: futures.analysis.ema21,
-      support: futures.analysis.support,
-      resistance: futures.analysis.resistance,
-      targetZone1: futures.analysis.target1,
-      targetZone2: futures.analysis.target2,
-      invalidation: futures.analysis.invalidation,
-      recentPriceBars: futures.candles.slice(-30)
-    };
-  }
-
   const sharedAssistantInstructions = "You are PlainStock Assistant, an educational market-research guide for non-professionals. Give substantial evidence and detail, but translate every technical idea into short, ordinary language. Start with the direct conclusion, use descriptive headings and compact tables, define unavoidable jargon immediately, and explain why each important number matters. Never invent a figure. State the reporting period or market-data date beside every time-sensitive figure. Clearly separate observed data, calculated signals, researched facts, and uncertainty. Never claim certainty or give personalized financial advice.";
 
   const agentSkills = {
@@ -1204,33 +837,16 @@
       name: "Valuation and risk",
       webSearch: true,
       instructions: "Research the latest defensible valuation measures available for this exact security, such as P/E, forward P/E, price-to-sales, EV/EBITDA, free-cash-flow yield, or an appropriate alternative. Cross-check the valuation date and denominator period. Use reliable current sources for shares, debt, cash, business risks, legal matters, segment concentration, and material changes; official company material and regulatory filings are useful supporting evidence when available. Compare with the company's own history or relevant peers only when reliable current sources support it. Explain what investors appear to be assuming, plus major business, concentration, competition, balance-sheet, legal, and expectation risks. State every valuation date because price-based ratios change. Flag source disagreement and never invent a fair-value target."
-    },
-    futuresCandles: {
-      name: "Price direction",
-      webSearch: false,
-      instructions: "Use only the supplied candle JSON. Recalculate the direction from the supplied values, then explain trend alignment, momentum, EMA relationship, recent support and resistance, and whether the structure is bullish, bearish, or mixed. Identify evidence both for and against the setup. Do not introduce prices that are not in the data."
-    },
-    futuresTargets: {
-      name: "Targets and risk",
-      webSearch: false,
-      instructions: "Use only the supplied candle calculations. Audit the ATR-based target zones and invalidation level, explain reward-versus-risk in plain English, and identify when the setup should be treated as no-trade. Check that targets and invalidation are on the correct side of the latest price for the stated direction. Targets are planning zones, never predictions. Explain leverage, gap, slippage, and event risk simply."
-    },
-    futuresContext: {
-      name: "Market context",
-      webSearch: true,
-      instructions: "Research only current, directly relevant market context for this futures product: major scheduled economic events, exchange notices, contract-roll considerations, or market-moving developments. Cross-check event dates with authoritative sources, state the time zone, and say when the selected product cannot be identified confidently. Explain how each event could increase uncertainty without pretending to predict its outcome. Do not override the supplied candle evidence."
     }
   };
 
   function visualContractFor(mode) {
     if (mode === "stock") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price evidence","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Financial health","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Valuation and risk","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"}]}[[/PLAINSTOCK_VISUAL]]. Include only checks supported by returned evidence; omit unavailable or 0-confidence checks entirely. Second: [[PLAINSTOCK_VISUAL]]{"kind":"financial-series","title":"Revenue, profit, cash flow and debt","unit":"currency plus scale, for example USD billions","periods":["FY2023","FY2024","FY2025"],"series":[{"name":"Revenue","values":[0,0,0],"tone":"good"},{"name":"Net profit","values":[0,0,0],"tone":"good"},{"name":"Free cash flow","values":[0,0,0],"tone":"good"},{"name":"Total debt","values":[0,0,0],"tone":"warn"}],"note":"short scope note"}[[/PLAINSTOCK_VISUAL]]. Use only verified figures, null for unavailable values, and the same stated unit.`;
-    if (mode === "futures") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price direction","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS","confidence":70,"tone":"good or warn or bad"},{"label":"Price zones and risk","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS","confidence":70,"tone":"good or warn or bad"},{"label":"Market context","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS","confidence":70,"tone":"good or warn or bad"}]}[[/PLAINSTOCK_VISUAL]]. Translate specialist LONG votes to UPWARD CONDITIONS, SHORT votes to DOWNWARD CONDITIONS, and NO_TRADE votes to NO CLEAR DIRECTION. Include only checks supported by returned evidence; omit unavailable or 0-confidence checks entirely. Second: [[PLAINSTOCK_VISUAL]]{"kind":"levels","title":"Futures price map","unit":"price units","items":[{"label":"Support (price floor)","value":0,"tone":"good"},{"label":"Latest price","value":0,"tone":"neutral"},{"label":"Resistance (price ceiling)","value":0,"tone":"warn"},{"label":"Possible zone 1","value":0,"tone":"good"},{"label":"Possible zone 2","value":0,"tone":"good"},{"label":"Risk line","value":0,"tone":"bad"}]}[[/PLAINSTOCK_VISUAL]]. Copy level values only from verified app data and omit unavailable levels.`;
     return `When the answer contains at least two useful comparable numbers, add one raw JSON block with no Markdown fence: [[PLAINSTOCK_VISUAL]]{"kind":"comparison","title":"Simple comparison","items":[{"label":"Metric","display":"human-readable value","score":50,"tone":"good or warn or bad or neutral","note":"why it matters"}]}[[/PLAINSTOCK_VISUAL]]. Score is only a 0-100 bar position for display. Do not add a visual when it would not clarify the answer.`;
   }
 
   function instructionsFor(mode) {
     if (mode === "stock") return `${sharedAssistantInstructions} Analyze the selected stock using supplied dashboard facts and current researched evidence. Explain what supports and weakens the case. Describe the price trend as POSITIVE TREND, MIXED TREND, or WEAK TREND, never as a buy or sell instruction, and identify missing valuation or financial data. Use official company material and regulatory filings as optional supporting evidence when available. ${visualContractFor(mode)}`;
-    if (mode === "futures") return `${sharedAssistantInstructions} Analyze the supplied futures price history. Refer to the friendly market name only and never display or explain the internal provider contract code. Lead with UPWARD CONDITIONS, DOWNWARD CONDITIONS, or NO CLEAR DIRECTION. Call ATR "typical movement" and invalidation the "risk line"; explain support as a price floor and resistance as a price ceiling. Clearly label levels as possible zones and discuss leverage and risk. Never provide a trade instruction or promise a zone will be reached. ${visualContractFor(mode)}`;
     return `${sharedAssistantInstructions} Answer general questions clearly. When explaining PlainStock, say its built-in stock result is based on price and volume, not a full company valuation. Direct detailed company research questions to Stock Analytics. ${visualContractFor(mode)}`;
   }
 
@@ -1382,7 +998,7 @@
   function workflowSkills(mode) {
     return mode === "stock"
       ? [agentSkills.stockPrice, agentSkills.stockFundamentals, agentSkills.stockValuation]
-      : [agentSkills.futuresCandles, agentSkills.futuresTargets, agentSkills.futuresContext];
+      : [];
   }
 
   function specialistMetadata(report) {
@@ -1426,23 +1042,17 @@
     if (!report?.text) return { rawVote: "UNAVAILABLE", vote: "UNAVAILABLE", tone: "neutral", confidence: 0 };
     const metadata = specialistMetadata(report);
     const normalized = String(report.text).replace(/[*_`]/g, "").replace(/\u00a0/g, " ");
-    const voteMatch = normalized.match(/(?:SPECIALIST\s*VOTE|FINAL\s*VOTE|VOTE)\s*[:=-]\s*(POSITIVE|MIXED|CAUTIOUS|LONG|NO\s*TRADE|SHORT)/i);
+    const voteMatch = normalized.match(/(?:SPECIALIST\s*VOTE|FINAL\s*VOTE|VOTE)\s*[:=-]\s*(POSITIVE|MIXED|CAUTIOUS)/i);
     const confidenceMatch = normalized.match(/CONFIDENCE\s*[:=-]\s*(\d{1,3})/i);
     let rawVote = String(metadata.vote || voteMatch?.[1] || "").toUpperCase().replace(/[ -]+/g, "_");
     let confidence = Math.max(0, Math.min(100, Number(metadata.confidence ?? confidenceMatch?.[1]) || 0));
-    if (!rawVote || !["POSITIVE", "MIXED", "CAUTIOUS", "LONG", "NO_TRADE", "SHORT"].includes(rawVote)) {
-      rawVote = mode === "futures" ? "NO_TRADE" : "MIXED";
+    if (!rawVote || !["POSITIVE", "MIXED", "CAUTIOUS"].includes(rawVote)) {
+      rawVote = "MIXED";
       confidence = confidence || 25;
     }
-    if (mode === "futures") {
-      if (rawVote === "LONG") return { rawVote, vote: "UPWARD CONDITIONS", tone: "good", confidence };
-      if (rawVote === "SHORT") return { rawVote, vote: "DOWNWARD CONDITIONS", tone: "bad", confidence };
-      if (rawVote === "NO_TRADE") return { rawVote, vote: "NO CLEAR DIRECTION", tone: "warn", confidence };
-    } else {
-      if (rawVote === "POSITIVE") return { rawVote, vote: "POSITIVE", tone: "good", confidence };
-      if (rawVote === "MIXED") return { rawVote, vote: "MIXED", tone: "warn", confidence };
-      if (rawVote === "CAUTIOUS") return { rawVote, vote: "CAUTIOUS", tone: "bad", confidence };
-    }
+    if (rawVote === "POSITIVE") return { rawVote, vote: "POSITIVE", tone: "good", confidence };
+    if (rawVote === "MIXED") return { rawVote, vote: "MIXED", tone: "warn", confidence };
+    if (rawVote === "CAUTIOUS") return { rawVote, vote: "CAUTIOUS", tone: "bad", confidence };
     return { rawVote: "UNAVAILABLE", vote: "UNAVAILABLE", tone: "neutral", confidence: 0 };
   }
 
@@ -1465,18 +1075,12 @@
       return { label: skill.name, ...specialistVote(report, mode) };
     });
     const available = items.filter((item) => item.rawVote !== "UNAVAILABLE");
-    let conclusion = mode === "stock" ? "MIXED TREND" : "NO CLEAR DIRECTION";
+    let conclusion = "MIXED TREND";
     if (mode === "stock" && available.length >= 2) {
       const positive = available.filter((item) => item.rawVote === "POSITIVE").length;
       const cautious = available.filter((item) => item.rawVote === "CAUTIOUS").length;
       if (positive >= 2 && cautious === 0) conclusion = "POSITIVE TREND";
       else if (cautious >= 2 && positive === 0) conclusion = "WEAK TREND";
-    }
-    if (mode === "futures" && available.length >= 2) {
-      const long = available.filter((item) => item.rawVote === "LONG").length;
-      const short = available.filter((item) => item.rawVote === "SHORT").length;
-      if (long >= 2 && short === 0) conclusion = "UPWARD CONDITIONS";
-      else if (short >= 2 && long === 0) conclusion = "DOWNWARD CONDITIONS";
     }
 
     const consensusVisual = {
@@ -1485,32 +1089,6 @@
       items: items.map(({ label, vote, tone, confidence }) => ({ label, vote, tone, confidence }))
     };
     const evidence = reports.map((report) => `### ${report.skill}\n${conciseSpecialistEvidence(report.text)}`).join("\n\n");
-    if (mode === "futures") {
-      const reason = conclusion === "UPWARD CONDITIONS"
-        ? "Most completed checks support an upward setup."
-        : conclusion === "DOWNWARD CONDITIONS"
-          ? "Most completed checks support a downward setup."
-          : "The completed checks disagree or do not provide enough confirmation.";
-      const levelsVisual = {
-        kind: "levels",
-        title: "Futures price map",
-        unit: "Price units",
-        items: [
-          { label: "Support (price floor)", value: context?.support, tone: "good" },
-          { label: "Latest price", value: context?.latestPriceBar?.close, tone: "neutral" },
-          { label: "Resistance (price ceiling)", value: context?.resistance, tone: "warn" },
-          { label: "Possible target 1", value: context?.targetZone1, tone: "good" },
-          { label: "Possible target 2", value: context?.targetZone2, tone: "good" },
-          { label: "Risk line", value: context?.invalidation, tone: "bad" }
-        ].filter((item) => Number.isFinite(visualNumber(item.value)))
-      };
-      return {
-        text: `Conditions: ${conclusion}\n\n${reason} PlainStock combined the completed model checks automatically.\n\n## Price map\n\n| What matters | Level |\n|---|---:|\n| Latest price | ${formatNumber(context?.latestPriceBar?.close, 4)} |\n| Price floor | ${formatNumber(context?.support, 4)} |\n| Price ceiling | ${formatNumber(context?.resistance, 4)} |\n| Possible zone 1 | ${formatNumber(context?.targetZone1, 4)} |\n| Risk line | ${formatNumber(context?.invalidation, 4)} |\n\n## Completed model evidence\n\n${evidence}\n\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(consensusVisual)}[[/PLAINSTOCK_VISUAL]]\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(levelsVisual)}[[/PLAINSTOCK_VISUAL]]`,
-        model: reports[0]?.model || "local-consensus",
-        localFallback: true
-      };
-    }
-
     const reason = conclusion === "POSITIVE TREND"
       ? "The completed checks are positive."
       : conclusion === "WEAK TREND"
@@ -1557,13 +1135,10 @@
     const reportText = reports.length
       ? reports.map((report) => `## ${report.skill}\n${report.text}`).join("\n\n")
       : "No specialist reports were used in this mode.";
-    const futuresPlainLanguage = mode === "futures"
-      ? " In visitor-facing text, translate LONG to UPWARD CONDITIONS, SHORT to DOWNWARD CONDITIONS, and NO_TRADE to NO CLEAR DIRECTION. Call ATR typical movement, support a price floor, resistance a price ceiling, and invalidation a risk line. Never show the internal provider contract code or issue a trade instruction."
-      : "";
     const stockSourceCheck = mode === "stock"
       ? " For company facts, prefer official earnings material, investor-relations pages, and regulatory filings when available. Missing evidence must be disclosed, but no single source is a mandatory gate."
       : "";
-    const validationInstructions = `${sharedAssistantInstructions} You are the independent final validator. Check the draft against the verified app JSON and every specialist report. Recheck arithmetic, units, reporting periods, source dates, direction labels, targets, and confidence claims.${stockSourceCheck} Do not force agreement: preserve and clearly explain genuine disagreement. Remove or correct any unsupported statement or figure. Return the corrected final answer only, not a review memo. Preserve the direct non-technical style.${futuresPlainLanguage} Recreate all required PlainStock visual blocks with corrected values. ${visualContractFor(mode)}`;
+    const validationInstructions = `${sharedAssistantInstructions} You are the independent final validator. Check the draft against the verified app JSON and every specialist report. Recheck arithmetic, units, reporting periods, source dates, direction labels, and confidence claims.${stockSourceCheck} Do not force agreement: preserve and clearly explain genuine disagreement. Remove or correct any unsupported statement or figure. Return the corrected final answer only, not a review memo. Preserve the direct non-technical style. Recreate all required PlainStock visual blocks with corrected values. ${visualContractFor(mode)}`;
     return requestGemini({
       models: configuredRoute("validator", defaultAgentRoutes.validator),
       instructions: validationInstructions,
@@ -1582,15 +1157,12 @@
   }
 
   async function runAgentWorkflow(mode, prompt) {
-    const context = mode === "stock" ? compactStockContext(stockSnapshot()) : compactFuturesContext(state.futures);
+    const context = compactStockContext(stockSnapshot());
     const history = recentConversation(mode, prompt);
     const skills = workflowSkills(mode);
     const specialistModels = configuredRoute("specialist", defaultAgentRoutes.specialist);
     const currentDate = new Date().toISOString().slice(0, 10);
-    const voteInstructionFor = () => {
-      if (mode === "futures") return `Your FIRST output line must be valid one-line JSON prefixed exactly with PLAINSTOCK_SPECIALIST: using this shape: PLAINSTOCK_SPECIALIST: {"vote":"LONG or NO_TRADE or SHORT","confidence":70}. Choose one real vote and integer confidence; do not copy the option list. Put this machine-readable line first so it cannot be cut off, then write the evidence note.`;
-      return `Your FIRST output line must be valid one-line JSON prefixed exactly with PLAINSTOCK_SPECIALIST: using this shape: PLAINSTOCK_SPECIALIST: {"vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70}. Choose one real vote and integer confidence; do not copy the option list. Put this machine-readable line first so it cannot be cut off, then write the evidence note.`;
-    };
+    const voteInstructionFor = () => `Your FIRST output line must be valid one-line JSON prefixed exactly with PLAINSTOCK_SPECIALIST: using this shape: PLAINSTOCK_SPECIALIST: {"vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70}. Choose one real vote and integer confidence; do not copy the option list. Put this machine-readable line first so it cannot be cut off, then write the evidence note.`;
     const runSkill = (skill) => requestGemini({
       models: specialistModels,
       instructions: `${sharedAssistantInstructions} You are the ${skill.name} specialist in a coordinated ${mode} research workflow. ${skill.instructions} Validate your own evidence before voting, name contradictions, and do not copy another specialist's likely opinion. Return a detailed evidence note for the lead analyst. Do not address the visitor as if you are the final answer. ${voteInstructionFor()}`,
@@ -1617,9 +1189,7 @@
 
     setAgentActivity(`Combining ${reports.length} specialist findings…`);
     const missing = skills.filter((skill) => !reports.some((report) => report.skill === skill.name)).map((skill) => skill.name);
-    const synthesisInstructions = mode === "stock"
-      ? `${sharedAssistantInstructions} You are the lead stock researcher. Use only the verified app data and specialist reports supplied below. Start with "Research view: POSITIVE TREND", "Research view: MIXED TREND", or "Research view: WEAK TREND", then one short reason. Treat it as a price description, not personal advice. Show the three model checks and explain disagreements before reaching the final view; never imply that model calls are independent human analysts. Keep the dashboard price trend distinct from company quality and valuation. Provide detailed sections for: plain-English conclusion; revenue and profit trend; cash flow quality; debt and liquidity; valuation and market expectations; strongest evidence; biggest risks; upcoming items to watch; and what could change the view. Include a compact table with periods, values, direction, and why each number matters. Be conservative and disclose missing or conflicting figures. ${visualContractFor(mode)}`
-      : `${sharedAssistantInstructions} You are the lead futures researcher. Use only the verified price-history data and specialist reports supplied below. Refer to the friendly market name only; never expose or explain the internal provider contract code. Start with "Conditions: UPWARD", "Conditions: DOWNWARD", or "Conditions: NO CLEAR DIRECTION", followed by one short reason. Translate LONG to UPWARD CONDITIONS, SHORT to DOWNWARD CONDITIONS, and NO_TRADE to NO CLEAR DIRECTION in visitor-facing text. Show the three model checks and explain disagreements; never imply they are independent human analysts. Give simple sections for price direction, possible price zones, risk line, event context, leverage risk, and what would invalidate the observation. Call ATR "typical movement", support a "price floor", resistance a "price ceiling", and invalidation a "risk line". Include a compact price-level table. Possible zones are descriptive, not predictions or instructions. ${visualContractFor(mode)}`;
+    const synthesisInstructions = `${sharedAssistantInstructions} You are the lead stock researcher. Use only the verified app data and specialist reports supplied below. Start with "Research view: POSITIVE TREND", "Research view: MIXED TREND", or "Research view: WEAK TREND", then one short reason. Treat it as a price description, not personal advice. Show the three model checks and explain disagreements before reaching the final view; never imply that model calls are independent human analysts. Keep the dashboard price trend distinct from company quality and valuation. Provide detailed sections for: plain-English conclusion; revenue and profit trend; cash flow quality; debt and liquidity; valuation and market expectations; strongest evidence; biggest risks; upcoming items to watch; and what could change the view. Include a compact table with periods, values, direction, and why each number matters. Be conservative and disclose missing or conflicting figures. ${visualContractFor(mode)}`;
     const synthesisInput = [
       `Current date: ${currentDate}`,
       `Verified app data (JSON):\n${JSON.stringify(context)}`,
@@ -1677,11 +1247,7 @@
       ? config.modelRoutes[mode]
       : defaultRoutes[mode];
     const history = recentConversation(mode, prompt);
-    const context = mode === "stock"
-      ? compactStockContext(stockSnapshot())
-      : mode === "futures"
-        ? compactFuturesContext(state.futures)
-        : null;
+    const context = mode === "stock" ? compactStockContext(stockSnapshot()) : null;
     const draft = await requestGemini({
       models: route,
       instructions: instructionsFor(mode),
@@ -1719,9 +1285,6 @@
     if (mode === "stock") {
       const context = compactStockContext(stockSnapshot());
       contextIdentity = `${context?.symbol || "none"}|${context?.priceAsOf || ""}|${context?.currentPrice || ""}`;
-    } else if (mode === "futures") {
-      const context = compactFuturesContext(state.futures);
-      contextIdentity = `${context?.market || "none"}|${context?.timeView || ""}|${context?.latestPriceBar?.time || ""}|${context?.latestPriceBar?.close || ""}`;
     }
     const source = `${mode}|${contextIdentity}|${normalizedPrompt}`;
     let hash = 2166136261;
@@ -1761,7 +1324,7 @@
       return cached;
     }
     let result;
-    if ((mode === "stock" || mode === "futures") && agentWorkflows[mode]) {
+    if (mode === "stock" && agentWorkflows.stock) {
       result = await runAgentWorkflow(mode, prompt);
     } else {
       result = await callSingleAssistant(mode, prompt);
@@ -1814,17 +1377,8 @@
       }
     }
 
-    if (mode === "futures" && !state.futures) {
-      const local = localNormalText(text);
-      addMessage("assistant", `${local}\n\nChoose one of the suggested markets above when you want a simple buy, sell, or wait setup.`);
-      setSuggestionsVisible(mode, true);
-      return;
-    }
-
     if (!hasGeminiKey) {
-      const local = mode === "futures"
-        ? localFuturesText(text, state.futures)
-        : localNormalText(text);
+      const local = localNormalText(text);
       addMessage("assistant", local, { rawText: local });
       setSuggestionsVisible(mode, true);
       return;
@@ -1837,9 +1391,7 @@
     } catch (error) {
       const fallback = mode === "stock"
         ? localStockText(text, stockSnapshot())
-        : mode === "futures"
-          ? `Suggestion: ${futuresSuggestion(state.futures.analysis.direction).label}\n\nThe built-in price calculation shows possible target zones at ${formatNumber(state.futures.analysis.target1, 4)} and ${formatNumber(state.futures.analysis.target2, 4)}.`
-          : "The live research service is busy right now. Please try the question again shortly.";
+        : "The live research service is busy right now. Please try the question again shortly.";
       const serviceNote = mode === "normal"
         ? "Your conversation is still here."
         : "PlainStock is showing the verified built-in result so the page remains useful while live research capacity recovers.";
@@ -1875,10 +1427,6 @@
   elements.quickActions.addEventListener("click", (event) => {
     const button = event.target.closest("[data-assistant-prompt]");
     if (button) handlePrompt(button.dataset.assistantPrompt);
-  });
-  elements.futuresControls.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-futures-market]");
-    if (button) loadFutures(button.dataset.futuresMarket);
   });
   document.addEventListener("plainstock:stock-update", () => {
     if (state.mode === "stock") {
