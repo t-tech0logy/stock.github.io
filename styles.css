@@ -32,10 +32,19 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    radial-gradient(circle at 15% 0%, rgba(201, 241, 108, 0.17), transparent 26rem),
+    radial-gradient(
+      circle at 15% 0%,
+      rgba(201, 241, 108, 0.17),
+      transparent 26rem
+    ),
     var(--paper);
   font-family:
-    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   font-size: 16px;
   line-height: 1.5;
 }
@@ -73,6 +82,68 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.site-nav a,
+.footer-links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.site-nav a {
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible,
+.site-nav a[aria-current="page"],
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  outline: none;
+}
+
+.nav-toggle {
+  display: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 254, 250, 0.9);
+  cursor: pointer;
+}
+
+.nav-toggle span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin: 3px auto;
+  border-radius: 999px;
+  background: var(--ink);
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.nav-toggle[aria-expanded="true"] span:nth-child(1) {
+  transform: translateY(5px) rotate(45deg);
+}
+.nav-toggle[aria-expanded="true"] span:nth-child(2) {
+  opacity: 0;
+}
+.nav-toggle[aria-expanded="true"] span:nth-child(3) {
+  transform: translateY(-5px) rotate(-45deg);
 }
 
 .brand {
@@ -166,13 +237,17 @@ main {
   color: var(--ink);
   background: var(--card);
   font-size: 17px;
-  box-shadow: var(--shadow), 0 0 0 1px rgba(57, 69, 60, 0.06);
+  box-shadow:
+    var(--shadow),
+    0 0 0 1px rgba(57, 69, 60, 0.06);
   transition: 160ms ease;
 }
 
 .search-shell > input:focus {
   border-color: rgba(31, 111, 74, 0.42);
-  box-shadow: var(--shadow), 0 0 0 4px rgba(31, 111, 74, 0.09);
+  box-shadow:
+    var(--shadow),
+    0 0 0 4px rgba(31, 111, 74, 0.09);
 }
 
 .search-icon {
@@ -569,7 +644,11 @@ main {
   overflow: hidden;
   color: #f9fcf7;
   background:
-    radial-gradient(circle at 10% 120%, rgba(201, 241, 108, 0.2), transparent 36%),
+    radial-gradient(
+      circle at 10% 120%,
+      rgba(201, 241, 108, 0.2),
+      transparent 36%
+    ),
     linear-gradient(125deg, #18291f, #203d2c 64%, #173224);
   box-shadow: 0 28px 70px rgba(29, 56, 39, 0.18);
 }
@@ -604,7 +683,10 @@ main {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: conic-gradient(var(--green-bright) var(--score-angle), rgba(255, 255, 255, 0.12) 0);
+  background: conic-gradient(
+    var(--green-bright) var(--score-angle),
+    rgba(255, 255, 255, 0.12) 0
+  );
   transition: --score-angle 500ms ease;
 }
 
@@ -852,25 +934,33 @@ main {
   border: 2px solid #32a466;
   border-radius: 15px;
   background: linear-gradient(180deg, #eefaf1 0%, #fdfdf8 68%);
-  box-shadow: inset 0 4px 0 #32a466, 0 8px 24px rgba(40, 118, 83, 0.08);
+  box-shadow:
+    inset 0 4px 0 #32a466,
+    0 8px 24px rgba(40, 118, 83, 0.08);
 }
 
 .check-card.watch {
   border-color: #e29a27;
   background: linear-gradient(180deg, #fff6df 0%, #fdfdf8 68%);
-  box-shadow: inset 0 4px 0 #e29a27, 0 8px 24px rgba(155, 96, 22, 0.09);
+  box-shadow:
+    inset 0 4px 0 #e29a27,
+    0 8px 24px rgba(155, 96, 22, 0.09);
 }
 
 .check-card.weak {
   border-color: #d55a52;
   background: linear-gradient(180deg, #fff0ed 0%, #fdfdf8 68%);
-  box-shadow: inset 0 4px 0 #d55a52, 0 8px 24px rgba(162, 59, 53, 0.09);
+  box-shadow:
+    inset 0 4px 0 #d55a52,
+    0 8px 24px rgba(162, 59, 53, 0.09);
 }
 
 .check-card.info {
   border-color: #5b8fa5;
   background: linear-gradient(180deg, #edf6fa 0%, #fdfdf8 68%);
-  box-shadow: inset 0 4px 0 #5b8fa5, 0 8px 24px rgba(49, 95, 115, 0.08);
+  box-shadow:
+    inset 0 4px 0 #5b8fa5,
+    0 8px 24px rgba(49, 95, 115, 0.08);
 }
 
 .check-card-top {
@@ -1015,9 +1105,24 @@ main {
   overflow: hidden;
   border-radius: 12px;
   background:
-    linear-gradient(to bottom, transparent 24.7%, rgba(48, 58, 51, 0.06) 25%, transparent 25.3%),
-    linear-gradient(to bottom, transparent 49.7%, rgba(48, 58, 51, 0.06) 50%, transparent 50.3%),
-    linear-gradient(to bottom, transparent 74.7%, rgba(48, 58, 51, 0.06) 75%, transparent 75.3%);
+    linear-gradient(
+      to bottom,
+      transparent 24.7%,
+      rgba(48, 58, 51, 0.06) 25%,
+      transparent 25.3%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 49.7%,
+      rgba(48, 58, 51, 0.06) 50%,
+      transparent 50.3%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 74.7%,
+      rgba(48, 58, 51, 0.06) 75%,
+      transparent 75.3%
+    );
 }
 
 #price-chart {
@@ -1072,25 +1177,33 @@ main {
   border: 2px solid #32a466;
   border-radius: 15px;
   background: linear-gradient(180deg, #eefaf1 0%, #fdfdf8 72%);
-  box-shadow: inset 0 4px 0 #32a466, 0 8px 24px rgba(40, 118, 83, 0.08);
+  box-shadow:
+    inset 0 4px 0 #32a466,
+    0 8px 24px rgba(40, 118, 83, 0.08);
 }
 
 .metric-item.watch {
   border-color: #e29a27;
   background: linear-gradient(180deg, #fff6df 0%, #fdfdf8 72%);
-  box-shadow: inset 0 4px 0 #e29a27, 0 8px 24px rgba(155, 96, 22, 0.09);
+  box-shadow:
+    inset 0 4px 0 #e29a27,
+    0 8px 24px rgba(155, 96, 22, 0.09);
 }
 
 .metric-item.weak {
   border-color: #d55a52;
   background: linear-gradient(180deg, #fff0ed 0%, #fdfdf8 72%);
-  box-shadow: inset 0 4px 0 #d55a52, 0 8px 24px rgba(162, 59, 53, 0.09);
+  box-shadow:
+    inset 0 4px 0 #d55a52,
+    0 8px 24px rgba(162, 59, 53, 0.09);
 }
 
 .metric-item.info {
   border-color: #5b8fa5;
   background: linear-gradient(180deg, #edf6fa 0%, #fdfdf8 72%);
-  box-shadow: inset 0 4px 0 #5b8fa5, 0 8px 24px rgba(49, 95, 115, 0.08);
+  box-shadow:
+    inset 0 4px 0 #5b8fa5,
+    0 8px 24px rgba(49, 95, 115, 0.08);
 }
 
 .metric-top {
@@ -1266,7 +1379,11 @@ main {
 
 .context-section {
   background:
-    radial-gradient(circle at 100% 0, rgba(201, 241, 108, 0.1), transparent 28%),
+    radial-gradient(
+      circle at 100% 0,
+      rgba(201, 241, 108, 0.1),
+      transparent 28%
+    ),
     var(--card);
 }
 
@@ -1395,7 +1512,9 @@ main {
 }
 
 @keyframes context-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .context-empty {
@@ -1731,6 +1850,32 @@ footer {
   font-size: 11px;
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+}
+
+.ad-slot {
+  margin: 30px 0;
+  min-height: 120px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--soft-muted);
+  text-align: center;
+}
+
+.ad-slot > span {
+  display: block;
+  padding: 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 footer strong {
   color: var(--ink);
   font-size: 14px;
@@ -1759,8 +1904,13 @@ footer p {
   background: #1b1e1c;
   cursor: pointer;
   text-align: left;
-  box-shadow: 0 14px 38px rgba(20, 28, 23, 0.27), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  box-shadow:
+    0 14px 38px rgba(20, 28, 23, 0.27),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
 }
 
 .assistant-launcher:hover {
@@ -1880,13 +2030,21 @@ footer p {
   overflow: hidden;
   color: var(--ink);
   background:
-    radial-gradient(circle at 85% 15%, rgba(201, 241, 108, 0.13), transparent 13rem),
+    radial-gradient(
+      circle at 85% 15%,
+      rgba(201, 241, 108, 0.13),
+      transparent 13rem
+    ),
     #f7f8f2;
-  box-shadow: 0 34px 100px rgba(20, 32, 24, 0.31), 0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+  box-shadow:
+    0 34px 100px rgba(20, 32, 24, 0.31),
+    0 0 0 1px rgba(255, 255, 255, 0.35) inset;
   opacity: 0;
   transform: translateY(14px) scale(0.985);
   transform-origin: bottom right;
-  transition: opacity 170ms ease, transform 170ms ease;
+  transition:
+    opacity 170ms ease,
+    transform 170ms ease;
 }
 
 .assistant-panel.open {
@@ -1961,7 +2119,12 @@ body.assistant-fullscreen-open {
   right: 18px;
   height: 2px;
   border-radius: 0 0 999px 999px;
-  background: linear-gradient(90deg, transparent, var(--green-bright), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--green-bright),
+    transparent
+  );
 }
 
 .assistant-identity {
@@ -2184,6 +2347,18 @@ body.assistant-fullscreen-open {
   display: none;
 }
 
+.assistant-mode-trigger-prefix {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  border-radius: 5px;
+  color: var(--green);
+  background: rgba(31, 111, 74, 0.1);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .assistant-mode-trigger-text {
   min-width: 0;
   display: flex;
@@ -2313,8 +2488,14 @@ body.assistant-fullscreen-open {
 }
 
 @keyframes assistant-menu-in {
-  from { opacity: 0; transform: translateY(7px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .assistant-mode-copy small {
@@ -2445,7 +2626,10 @@ body.assistant-fullscreen-open {
   background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   text-align: left;
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
 }
 
 .futures-market-choices button:hover,
@@ -3144,11 +3328,17 @@ body.assistant-fullscreen-open {
   font-size: 12px;
 }
 
-.assistant-financial-grid > article.good .assistant-financial-series-heading strong {
+.assistant-financial-grid
+  > article.good
+  .assistant-financial-series-heading
+  strong {
   color: #167044;
 }
 
-.assistant-financial-grid > article.warn .assistant-financial-series-heading strong {
+.assistant-financial-grid
+  > article.warn
+  .assistant-financial-series-heading
+  strong {
   color: #95601d;
 }
 
@@ -3309,6 +3499,21 @@ body.assistant-fullscreen-open {
   text-transform: uppercase;
 }
 
+.assistant-guide-link {
+  float: right;
+  margin: -19px 2px 7px 0;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.assistant-guide-link:hover,
+.assistant-guide-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
 .assistant-quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3369,7 +3574,9 @@ body.assistant-fullscreen-open {
 
 .assistant-composer:focus-within {
   border-color: rgba(31, 111, 74, 0.38);
-  box-shadow: 0 10px 25px rgba(29, 42, 33, 0.1), 0 0 0 3px rgba(31, 111, 74, 0.07);
+  box-shadow:
+    0 10px 25px rgba(29, 42, 33, 0.1),
+    0 0 0 3px rgba(31, 111, 74, 0.07);
 }
 
 .assistant-composer textarea {
@@ -3488,11 +3695,16 @@ body.assistant-fullscreen-open {
 }
 
 @keyframes assistant-cursor-blink {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 
 @keyframes assistant-pulse {
-  to { opacity: 0.2; transform: scale(0.7); }
+  to {
+    opacity: 0.2;
+    transform: scale(0.7);
+  }
 }
 
 @media (max-width: 900px) {
@@ -3518,10 +3730,54 @@ body.assistant-fullscreen-open {
     width: 150px;
     height: 150px;
   }
-
 }
 
 @media (max-width: 680px) {
+  .site-header {
+    position: relative;
+    padding: 14px 0;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .nav-toggle {
+    display: block;
+    margin-left: auto;
+  }
+
+  .site-nav {
+    position: absolute;
+    z-index: 50;
+    top: calc(100% - 4px);
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    max-width: none;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--card);
+    box-shadow: 0 20px 55px rgba(42, 52, 45, 0.16);
+  }
+
+  .site-header.nav-enhanced .site-nav {
+    display: none;
+  }
+
+  .site-header.nav-enhanced .site-nav.open {
+    display: grid;
+  }
+
+  .site-nav a {
+    padding: 11px 12px;
+    font-size: 14px;
+  }
+
+  .brand small {
+    display: none;
+  }
+
   .site-header,
   main,
   footer {

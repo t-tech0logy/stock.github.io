@@ -3,14 +3,18 @@
 
   const config = window.PLAINSTOCK_ASSISTANT_CONFIG || {};
   const dashboard = window.PLAINSTOCK_DASHBOARD || null;
+  const assistantProxyRoot = String(config.assistantProxyRoot || "").replace(/\/$/, "");
+  const marketProxyRoot = String(config.marketProxyRoot || dashboard?.getMarketProxyRoot?.() || "").replace(/\/$/, "");
   const geminiApiKeys = Array.from(new Set([
     config.geminiApiKey,
     ...(Array.isArray(config.geminiApiKeys) ? config.geminiApiKeys : [])
   ].map((key) => String(key || "").trim()).filter(Boolean)));
+  if (assistantProxyRoot && !geminiApiKeys.length) geminiApiKeys.push("__SERVER_PROXY__");
   const hasGeminiKey = geminiApiKeys.length > 0;
   const geminiApiRoot = String(config.geminiApiRoot || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
   const futuresApiRoot = String(config.futuresApiRoot || "https://api.massive.com").replace(/\/$/, "");
   const futuresApiKey = String(config.futuresApiKey || dashboard?.getMarketApiKey?.() || "").trim();
+  const hasFuturesConnection = Boolean(marketProxyRoot || futuresApiKey);
   const defaultRoutes = {
     normal: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
     stock: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
@@ -219,26 +223,26 @@
 
     if (mode === "futures") {
       if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:SELL SETUP|SHORT BIAS)/.test(lead)) {
-        return { tone: "bad", label: "SELL SETUP", meaning: "Price is leaning downward. Use the risk line before considering a trade." };
+        return { tone: "bad", label: "DOWNWARD CONDITIONS", meaning: "Recent prices are leaning downward. This describes market conditions, not a trade instruction." };
       }
       if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:BUY SETUP|LONG BIAS)/.test(lead)) {
-        return { tone: "good", label: "BUY SETUP", meaning: "Price is leaning upward. Check the target and risk line before considering a trade." };
+        return { tone: "good", label: "UPWARD CONDITIONS", meaning: "Recent prices are leaning upward. This describes market conditions, not a trade instruction." };
       }
       if (/(?:SUGGESTION(?: FOR [^:]+)?|SETUP)\s*:\s*(?:WAIT|NO TRADE)/.test(lead)) {
-        return { tone: "warn", label: "WAIT", meaning: "The evidence is not clear enough. Waiting is the safer research conclusion." };
+        return { tone: "warn", label: "NO CLEAR DIRECTION", meaning: "The available price evidence does not agree clearly." };
       }
       return null;
     }
 
     if (mode === "stock") {
       if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*AVOID/.test(lead)) {
-        return { tone: "bad", label: "AVOID", meaning: "Important warning signs outweigh the positive evidence right now." };
+        return { tone: "bad", label: "WEAK TREND", meaning: "Important price warnings outweigh the positive evidence right now." };
       }
       if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*BUY/.test(lead)) {
-        return { tone: "good", label: "BUY", meaning: "The available research evidence is currently positive." };
+        return { tone: "good", label: "POSITIVE TREND", meaning: "The available price evidence is currently positive." };
       }
       if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*WAIT/.test(lead)) {
-        return { tone: "warn", label: "WAIT", meaning: "The evidence is mixed or incomplete, so more confirmation is needed." };
+        return { tone: "warn", label: "MIXED TREND", meaning: "The evidence is mixed or incomplete, so more confirmation is needed." };
       }
     }
     return null;
@@ -609,7 +613,7 @@
     }
     return [
       ["Explain this dashboard", "Explain how this dashboard works", "?"],
-      ["What does BUY mean?", "What does the BUY signal mean?", "↑"],
+      ["What does positive trend mean?", "What does the positive price trend mean?", "↑"],
       ["How is risk measured?", "How does PlainStock measure risk?", "!"],
       ["Stock vs futures", "What is the difference between stocks and futures?", "⇄" ]
     ];
@@ -619,7 +623,7 @@
     const modeDetails = {
       normal: { label: "Normal", detail: "General questions", icon: "✦" },
       stock: { label: "Stock Analytics", detail: "Selected company", icon: "↗" },
-      futures: { label: "Futures", detail: "Simple trade suggestions", icon: "⌁" }
+      futures: { label: "Futures", detail: "Price conditions and risk", icon: "⌁" }
     };
     elements.modes.forEach((button) => {
       const active = button.dataset.assistantMode === state.mode;
@@ -686,7 +690,7 @@
       const snapshot = stockSnapshot();
       addMessage("assistant", snapshot
         ? hasGeminiKey
-          ? "I can see the stock currently open on the dashboard. I’ll combine its price signal with verified revenue, profit, cash flow, debt, valuation, risks, specialist consensus, and a final fact-check—then present the important trends visually in plain English."
+          ? "I can see the stock currently open on the dashboard. I’ll combine its price trend with researched revenue, profit, cash flow, debt, valuation, risks, model checks, and a final fact-check—then present the important evidence in plain English."
           : "I can see the stock currently open on the dashboard and can explain its price signal. Add a Gemini key when you want researched company finances, valuation, consensus, and visual financial trends."
         : "Search and open a stock above first. I will then use its actual dashboard numbers for a simple analysis.", { mode, animate: false });
       if (snapshot) {
@@ -696,7 +700,7 @@
       return;
     }
     if (mode === "futures") {
-      addMessage("assistant", "Choose one of the familiar markets above. I’ll load the correct data automatically and give you a simple **BUY SETUP**, **SELL SETUP**, or **WAIT** suggestion, with possible target zones, a risk line, agent consensus, and important events to watch.", { mode, animate: false });
+      addMessage("assistant", "Choose one of the familiar markets above. I’ll describe recent conditions as **UPWARD**, **DOWNWARD**, or **NO CLEAR DIRECTION**, with possible price zones, a risk line, model checks, and important events to watch.", { mode, animate: false });
       return;
     }
     addMessage("assistant", `
@@ -707,17 +711,17 @@
         <div class="assistant-welcome-points">
           <small><i aria-hidden="true">✦</i>General questions</small>
           <small><i aria-hidden="true">↗</i>Stock research</small>
-          <small><i aria-hidden="true">⌁</i>Futures setups</small>
+          <small><i aria-hidden="true">⌁</i>Futures conditions</small>
         </div>
       </section>
     `, { mode, trusted: true, label: "Research companion", animate: false });
   }
 
   function scoreTone(score) {
-    if (!Number.isFinite(score)) return { className: "wait", label: "WAIT" };
-    if (score >= 70) return { className: "buy", label: "BUY" };
-    if (score >= 50) return { className: "wait", label: "WAIT" };
-    return { className: "avoid", label: "AVOID" };
+    if (!Number.isFinite(score)) return { className: "wait", label: "MIXED TREND" };
+    if (score >= 70) return { className: "buy", label: "POSITIVE TREND" };
+    if (score >= 50) return { className: "wait", label: "MIXED TREND" };
+    return { className: "avoid", label: "WEAK TREND" };
   }
 
   function stockDataCard(snapshot) {
@@ -815,16 +819,16 @@
         ? `**Risk line for ${displayName}: ${formatNumber(analysis.invalidation, 4)}.** If price crosses that level against the suggested direction, the setup has weakened. Position size still matters because futures use leverage and price can move through a risk line quickly.`
         : `**There is no clear risk line for ${displayName} yet.** The direction is mixed, so forcing a buy or sell setup would be less reliable. Waiting is the cleaner choice.`;
     }
-    return `**Suggestion for ${displayName}: ${suggestion.label}.** ${suggestion.reason}\n\n- Latest price: ${formatNumber(analysis.latest.close, 4)}\n- Support (price floor): ${formatNumber(analysis.support, 4)}\n- Resistance (price ceiling): ${formatNumber(analysis.resistance, 4)}\n- First possible target: ${formatNumber(analysis.target1, 4)}\n- Risk line: ${Number.isFinite(analysis.invalidation) ? formatNumber(analysis.invalidation, 4) : "No clear level"}\n\nThis is a planning suggestion based on recent prices, not a trade instruction.`;
+    return `**Conditions for ${displayName}: ${suggestion.label}.** ${suggestion.reason}\n\n- Latest price: ${formatNumber(analysis.latest.close, 4)}\n- Support (price floor): ${formatNumber(analysis.support, 4)}\n- Resistance (price ceiling): ${formatNumber(analysis.resistance, 4)}\n- First possible zone: ${formatNumber(analysis.target1, 4)}\n- Risk line: ${Number.isFinite(analysis.invalidation) ? formatNumber(analysis.invalidation, 4) : "No clear level"}\n\nThis is a description of recent prices, not a trade instruction.`;
   }
 
   function localNormalText(prompt) {
     const lower = prompt.toLowerCase();
     if (lower.includes("buy") && (lower.includes("mean") || lower.includes("signal"))) {
-      return "**BUY means the price evidence is strong, not that you must buy.** PlainStock gives BUY when its combined price score is 70 or higher. It checks recent direction, longer direction, performance versus the S&P 500, trading activity, yearly range, and stability. Company finances and your personal situation are separate checks.";
+      return "**A positive trend means several price measures are supportive; it does not mean that you should buy.** PlainStock uses this label when its combined price score is 70 or higher. Company finances, valuation, portfolio fit, and your personal situation are separate checks.";
     }
     if (lower.includes("dashboard") || lower.includes("work")) {
-      return "PlainStock downloads daily market data, then asks six simple questions: Is the price rising? Is the longer trend healthy? Is it beating the wider market? Does trading activity support the move? Is it near its yearly high? How bumpy is it? Those answers produce a transparent BUY, WAIT, or AVOID price signal.";
+      return "PlainStock downloads daily market data, then asks six simple questions: Is the price rising? Is the longer trend healthy? Is it beating the wider market? Does trading activity support the move? Is it near its yearly high? How bumpy is it? Those answers produce a transparent positive, mixed, or weak price-trend label.";
     }
     if (lower.includes("risk") || lower.includes("bumpy")) {
       return "PlainStock measures price risk in two ways: **volatility**, which describes normal up-and-down movement, and **maximum drawdown**, which is the worst fall from a previous high. These describe the price journey; they do not capture every business or market risk.";
@@ -840,7 +844,7 @@
     }
     return hasGeminiKey
       ? "I can answer that with AI. Please try sending it again."
-      : "The built-in assistant can explain this dashboard, its BUY/WAIT/AVOID signal, price risk, stock analysis, suggested futures markets, and target calculations. Add a Gemini key in `assistant-config.js` later for broader questions and financial-report research.";
+      : "The built-in assistant can explain this dashboard, its price-trend label, price risk, stock analysis, futures market conditions, and price-zone calculations. Connect the protected assistant service later for broader questions and financial-report research.";
   }
 
   const futuresMarketSettings = {
@@ -852,10 +856,22 @@
   const futuresMonthCodes = ["F", "G", "H", "J", "K", "M", "N", "Q", "U", "V", "X", "Z"];
   const futuresContractCache = new Map();
 
+  function marketRequestUrl(path, parameters = {}) {
+    const url = marketProxyRoot
+      ? new URL(`${marketProxyRoot}/market`)
+      : new URL(`${futuresApiRoot}${path}`);
+    if (marketProxyRoot) url.searchParams.set("path", path);
+    Object.entries(parameters).forEach(([name, value]) => {
+      if (value !== null && value !== undefined) url.searchParams.set(name, String(value));
+    });
+    if (!marketProxyRoot && futuresApiKey) url.searchParams.set("apiKey", futuresApiKey);
+    return url;
+  }
+
   function futuresSuggestion(direction) {
-    if (direction === "Bullish") return { label: "BUY SETUP", reason: "Recent prices are leaning upward." };
-    if (direction === "Bearish") return { label: "SELL SETUP", reason: "Recent prices are leaning downward." };
-    return { label: "WAIT", reason: "Recent price signals do not agree clearly enough yet." };
+    if (direction === "Bullish") return { label: "UPWARD CONDITIONS", reason: "Recent prices are leaning upward." };
+    if (direction === "Bearish") return { label: "DOWNWARD CONDITIONS", reason: "Recent prices are leaning downward." };
+    return { label: "NO CLEAR DIRECTION", reason: "Recent price signals do not agree clearly enough yet." };
   }
 
   function futuresTimeLabel(resolution) {
@@ -897,14 +913,14 @@
       if (typeof dashboard?.reserveMarketRequest === "function") {
         await dashboard.reserveMarketRequest((seconds) => setStatus(`Free API pause · ${seconds}s`));
       }
-      const url = new URL(`${futuresApiRoot}/futures/v1/contracts`);
-      url.searchParams.set("product_code", root);
-      url.searchParams.set("active", "true");
-      url.searchParams.set("type", "single");
-      url.searchParams.set("date", today);
-      url.searchParams.set("limit", "24");
-      url.searchParams.set("sort", "last_trade_date.asc");
-      url.searchParams.set("apiKey", futuresApiKey);
+      const url = marketRequestUrl("/futures/v1/contracts", {
+        product_code: root,
+        active: true,
+        type: "single",
+        date: today,
+        limit: 24,
+        sort: "last_trade_date.asc"
+      });
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error("Contract lookup unavailable.");
@@ -1042,7 +1058,7 @@
             <tr><th>Risk line</th><td>${Number.isFinite(analysis.invalidation) ? formatNumber(analysis.invalidation, 4) : "Wait for a clear direction"}</td></tr>
           </tbody></table>
         </div>
-        <p class="assistant-card-note">This suggestion uses recent price direction and typical movement. Target zones are possibilities, not predictions or trade instructions.</p>
+        <p class="assistant-card-note">This view uses recent price direction and typical movement. Price zones are possibilities, not predictions or trade instructions.</p>
       </section>
     `;
   }
@@ -1052,8 +1068,8 @@
     const market = futuresMarketSettings[root];
     const resolution = elements.futuresResolution.value;
     if (!market) return;
-    if (!futuresApiKey) {
-      addMessage("assistant", "Futures market prices are not connected yet. Add a Polygon/Massive key in `config.js`, or a separate `futuresApiKey` in `assistant-config.js`. The suggested markets will then load directly in the browser.");
+    if (!hasFuturesConnection) {
+      addMessage("assistant", "Futures market prices are not connected yet. Configure the protected market-data service to enable this research view.");
       return;
     }
     elements.futuresMarkets.forEach((button) => button.classList.toggle("active", button.dataset.futuresMarket === root));
@@ -1065,10 +1081,10 @@
       if (typeof dashboard?.reserveMarketRequest === "function") {
         await dashboard.reserveMarketRequest((seconds) => setStatus(`Free API pause · ${seconds}s`));
       }
-      const url = new URL(`${futuresApiRoot}/futures/v1/aggs/${encodeURIComponent(ticker)}`);
-      url.searchParams.set("resolution", resolution);
-      url.searchParams.set("limit", resolution === "1session" ? "180" : "250");
-      url.searchParams.set("apiKey", futuresApiKey);
+      const url = marketRequestUrl(`/futures/v1/aggs/${encodeURIComponent(ticker)}`, {
+        resolution,
+        limit: resolution === "1session" ? 180 : 250
+      });
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -1082,15 +1098,15 @@
       state.suggestionsVisible.futures = false;
       addMessage("user", `Analyse ${market.label} using the selected time view`, { rawText: `Analyse ${market.label} using the selected time view` });
       const suggestion = futuresSuggestion(analysis.direction);
-      addMessage("assistant", futuresCard(state.futures), { trusted: true, label: "Market suggestion" });
-      addMessage("assistant", `**Suggestion for ${market.label}: ${suggestion.label}.** ${suggestion.reason} ${analysis.direction === "Mixed" ? "Waiting for a clearer direction is safer than forcing a target." : `The first possible target is ${formatNumber(analysis.target1, 4)}, while ${formatNumber(analysis.invalidation, 4)} is the risk line that would weaken this setup.`}`);
+      addMessage("assistant", futuresCard(state.futures), { trusted: true, label: "Market conditions" });
+      addMessage("assistant", `**Conditions for ${market.label}: ${suggestion.label}.** ${suggestion.reason} ${analysis.direction === "Mixed" ? "There is not enough agreement to describe a clear direction." : `The first possible price zone is ${formatNumber(analysis.target1, 4)}, while ${formatNumber(analysis.invalidation, 4)} is the risk line that would weaken this observation.`}`);
       renderModeUi();
       if (hasGeminiKey) {
         try {
           const result = await callGemini("futures", `Give me the full validated, plain-English futures analysis for ${market.label}.`);
           presentAiResult(result, "futures");
         } catch {
-          addMessage("assistant", "The price-based suggestion above is ready. The deeper research review is busy, so PlainStock kept the verified targets and risk line available instead of showing a technical error.", { mode: "futures", tone: "warn" });
+          addMessage("assistant", "The price-conditions view above is ready. The deeper research review is busy, so PlainStock kept the calculated zones and risk line available instead of showing a technical error.", { mode: "futures", tone: "warn" });
         }
       }
     } catch (error) {
@@ -1189,14 +1205,14 @@
   };
 
   function visualContractFor(mode) {
-    if (mode === "stock") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Agent consensus","items":[{"label":"Price evidence","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Financial health","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Valuation and risk","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]]. Replace confidence 0 with each specialist's honest 0-100 confidence; keep 0 only when that specialist is unavailable. Second: [[PLAINSTOCK_VISUAL]]{"kind":"financial-series","title":"Revenue, profit, cash flow and debt","unit":"currency plus scale, for example USD billions","periods":["FY2023","FY2024","FY2025"],"series":[{"name":"Revenue","values":[0,0,0],"tone":"good"},{"name":"Net profit","values":[0,0,0],"tone":"good"},{"name":"Free cash flow","values":[0,0,0],"tone":"good"},{"name":"Total debt","values":[0,0,0],"tone":"warn"}],"note":"short scope note"}[[/PLAINSTOCK_VISUAL]]. Use only verified figures, null for unavailable values, and the same stated unit.`;
-    if (mode === "futures") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Agent consensus","items":[{"label":"Price direction","vote":"BUY SETUP or WAIT or SELL SETUP or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Targets and risk","vote":"BUY SETUP or WAIT or SELL SETUP or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Market context","vote":"BUY SETUP or WAIT or SELL SETUP or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]]. Translate specialist LONG votes to BUY SETUP, SHORT votes to SELL SETUP, and NO_TRADE votes to WAIT. Replace confidence 0 with each specialist's honest 0-100 confidence; keep 0 only when that specialist is unavailable. Second: [[PLAINSTOCK_VISUAL]]{"kind":"levels","title":"Futures price map","unit":"price units","items":[{"label":"Support (price floor)","value":0,"tone":"good"},{"label":"Latest price","value":0,"tone":"neutral"},{"label":"Resistance (price ceiling)","value":0,"tone":"warn"},{"label":"Possible target 1","value":0,"tone":"good"},{"label":"Possible target 2","value":0,"tone":"good"},{"label":"Risk line","value":0,"tone":"bad"}]}[[/PLAINSTOCK_VISUAL]]. Copy level values only from verified app data and omit unavailable levels.`;
+    if (mode === "stock") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price evidence","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Financial health","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Valuation and risk","vote":"POSITIVE or MIXED or CAUTIOUS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]]. Replace confidence 0 with each model check's honest 0-100 confidence; keep 0 only when unavailable. Second: [[PLAINSTOCK_VISUAL]]{"kind":"financial-series","title":"Revenue, profit, cash flow and debt","unit":"currency plus scale, for example USD billions","periods":["FY2023","FY2024","FY2025"],"series":[{"name":"Revenue","values":[0,0,0],"tone":"good"},{"name":"Net profit","values":[0,0,0],"tone":"good"},{"name":"Free cash flow","values":[0,0,0],"tone":"good"},{"name":"Total debt","values":[0,0,0],"tone":"warn"}],"note":"short scope note"}[[/PLAINSTOCK_VISUAL]]. Use only verified figures, null for unavailable values, and the same stated unit.`;
+    if (mode === "futures") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price direction","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Price zones and risk","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"},{"label":"Market context","vote":"UPWARD CONDITIONS or NO CLEAR DIRECTION or DOWNWARD CONDITIONS or UNAVAILABLE","confidence":0,"tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]]. Translate specialist LONG votes to UPWARD CONDITIONS, SHORT votes to DOWNWARD CONDITIONS, and NO_TRADE votes to NO CLEAR DIRECTION. Replace confidence 0 with each model check's honest 0-100 confidence; keep 0 only when unavailable. Second: [[PLAINSTOCK_VISUAL]]{"kind":"levels","title":"Futures price map","unit":"price units","items":[{"label":"Support (price floor)","value":0,"tone":"good"},{"label":"Latest price","value":0,"tone":"neutral"},{"label":"Resistance (price ceiling)","value":0,"tone":"warn"},{"label":"Possible zone 1","value":0,"tone":"good"},{"label":"Possible zone 2","value":0,"tone":"good"},{"label":"Risk line","value":0,"tone":"bad"}]}[[/PLAINSTOCK_VISUAL]]. Copy level values only from verified app data and omit unavailable levels.`;
     return `When the answer contains at least two useful comparable numbers, add one raw JSON block with no Markdown fence: [[PLAINSTOCK_VISUAL]]{"kind":"comparison","title":"Simple comparison","items":[{"label":"Metric","display":"human-readable value","score":50,"tone":"good or warn or bad or neutral","note":"why it matters"}]}[[/PLAINSTOCK_VISUAL]]. Score is only a 0-100 bar position for display. Do not add a visual when it would not clarify the answer.`;
   }
 
   function instructionsFor(mode) {
-    if (mode === "stock") return `${sharedAssistantInstructions} Analyze the selected stock using supplied dashboard facts and current researched evidence. Explain what supports and weakens the case. Call BUY, WAIT, or AVOID a research label, not an instruction, and identify any missing valuation or financial data. Use official company material and regulatory filings as optional supporting evidence when available, but do not block the conclusion because one source is unavailable. ${visualContractFor(mode)}`;
-    if (mode === "futures") return `${sharedAssistantInstructions} Analyze the supplied futures price history. Refer to the friendly market name only and never display or explain the internal provider contract code. Lead with BUY SETUP, SELL SETUP, or WAIT. In the visitor-facing answer, call ATR "typical movement" and invalidation the "risk line"; explain support as a price floor and resistance as a price ceiling. Clearly label targets as possible zones and discuss leverage and risk. Never promise a target will be reached. ${visualContractFor(mode)}`;
+    if (mode === "stock") return `${sharedAssistantInstructions} Analyze the selected stock using supplied dashboard facts and current researched evidence. Explain what supports and weakens the case. Describe the price trend as POSITIVE TREND, MIXED TREND, or WEAK TREND, never as a buy or sell instruction, and identify missing valuation or financial data. Use official company material and regulatory filings as optional supporting evidence when available. ${visualContractFor(mode)}`;
+    if (mode === "futures") return `${sharedAssistantInstructions} Analyze the supplied futures price history. Refer to the friendly market name only and never display or explain the internal provider contract code. Lead with UPWARD CONDITIONS, DOWNWARD CONDITIONS, or NO CLEAR DIRECTION. Call ATR "typical movement" and invalidation the "risk line"; explain support as a price floor and resistance as a price ceiling. Clearly label levels as possible zones and discuss leverage and risk. Never provide a trade instruction or promise a zone will be reached. ${visualContractFor(mode)}`;
     return `${sharedAssistantInstructions} Answer general questions clearly. When explaining PlainStock, say its built-in stock result is based on price and volume, not a full company valuation. Direct detailed company research questions to Stock Analytics. ${visualContractFor(mode)}`;
   }
 
@@ -1299,13 +1315,15 @@
             }
           };
           if (options.tools?.length) body.tools = options.tools;
-          const response = await fetch(`${geminiApiRoot}/models/${encodeURIComponent(model)}:generateContent`, {
+          const response = await fetch(assistantProxyRoot
+            ? `${assistantProxyRoot}/assistant`
+            : `${geminiApiRoot}/models/${encodeURIComponent(model)}:generateContent`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-goog-api-key": apiKey
+              ...(assistantProxyRoot ? {} : { "x-goog-api-key": apiKey })
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify(assistantProxyRoot ? { model, request: body } : body),
             signal: controller.signal
           });
           const payload = await response.json().catch(() => ({}));
@@ -1399,9 +1417,9 @@
       confidence = confidence || 25;
     }
     if (mode === "futures") {
-      if (rawVote === "LONG") return { rawVote, vote: "BUY SETUP", tone: "good", confidence };
-      if (rawVote === "SHORT") return { rawVote, vote: "SELL SETUP", tone: "bad", confidence };
-      if (rawVote === "NO_TRADE") return { rawVote, vote: "WAIT", tone: "warn", confidence };
+      if (rawVote === "LONG") return { rawVote, vote: "UPWARD CONDITIONS", tone: "good", confidence };
+      if (rawVote === "SHORT") return { rawVote, vote: "DOWNWARD CONDITIONS", tone: "bad", confidence };
+      if (rawVote === "NO_TRADE") return { rawVote, vote: "NO CLEAR DIRECTION", tone: "warn", confidence };
     } else {
       if (rawVote === "POSITIVE") return { rawVote, vote: "POSITIVE", tone: "good", confidence };
       if (rawVote === "MIXED") return { rawVote, vote: "MIXED", tone: "warn", confidence };
@@ -1429,18 +1447,18 @@
       return { label: skill.name, ...specialistVote(report, mode) };
     });
     const available = items.filter((item) => item.rawVote !== "UNAVAILABLE");
-    let conclusion = mode === "stock" ? "WAIT" : "WAIT";
+    let conclusion = mode === "stock" ? "MIXED TREND" : "NO CLEAR DIRECTION";
     if (mode === "stock" && available.length >= 2) {
       const positive = available.filter((item) => item.rawVote === "POSITIVE").length;
       const cautious = available.filter((item) => item.rawVote === "CAUTIOUS").length;
-      if (positive >= 2 && cautious === 0) conclusion = "BUY";
-      else if (cautious >= 2 && positive === 0) conclusion = "AVOID";
+      if (positive >= 2 && cautious === 0) conclusion = "POSITIVE TREND";
+      else if (cautious >= 2 && positive === 0) conclusion = "WEAK TREND";
     }
     if (mode === "futures" && available.length >= 2) {
       const long = available.filter((item) => item.rawVote === "LONG").length;
       const short = available.filter((item) => item.rawVote === "SHORT").length;
-      if (long >= 2 && short === 0) conclusion = "BUY SETUP";
-      else if (short >= 2 && long === 0) conclusion = "SELL SETUP";
+      if (long >= 2 && short === 0) conclusion = "UPWARD CONDITIONS";
+      else if (short >= 2 && long === 0) conclusion = "DOWNWARD CONDITIONS";
     }
 
     const consensusVisual = {
@@ -1450,9 +1468,9 @@
     };
     const evidence = reports.map((report) => `### ${report.skill}\n${conciseSpecialistEvidence(report.text)}`).join("\n\n");
     if (mode === "futures") {
-      const reason = conclusion === "BUY SETUP"
+      const reason = conclusion === "UPWARD CONDITIONS"
         ? "Most completed checks support an upward setup."
-        : conclusion === "SELL SETUP"
+        : conclusion === "DOWNWARD CONDITIONS"
           ? "Most completed checks support a downward setup."
           : "The completed checks disagree or do not provide enough confirmation.";
       const levelsVisual = {
@@ -1469,19 +1487,19 @@
         ].filter((item) => Number.isFinite(visualNumber(item.value)))
       };
       return {
-        text: `Suggestion: ${conclusion}\n\n${reason} The independent checks completed successfully and PlainStock combined their votes automatically.\n\n## Simple price plan\n\n| What matters | Level |\n|---|---:|\n| Latest price | ${formatNumber(context?.latestPriceBar?.close, 4)} |\n| Price floor | ${formatNumber(context?.support, 4)} |\n| Price ceiling | ${formatNumber(context?.resistance, 4)} |\n| Possible target 1 | ${formatNumber(context?.targetZone1, 4)} |\n| Risk line | ${formatNumber(context?.invalidation, 4)} |\n\n## Completed specialist evidence\n\n${evidence}\n\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(consensusVisual)}[[/PLAINSTOCK_VISUAL]]\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(levelsVisual)}[[/PLAINSTOCK_VISUAL]]`,
+        text: `Conditions: ${conclusion}\n\n${reason} PlainStock combined the completed model checks automatically.\n\n## Price map\n\n| What matters | Level |\n|---|---:|\n| Latest price | ${formatNumber(context?.latestPriceBar?.close, 4)} |\n| Price floor | ${formatNumber(context?.support, 4)} |\n| Price ceiling | ${formatNumber(context?.resistance, 4)} |\n| Possible zone 1 | ${formatNumber(context?.targetZone1, 4)} |\n| Risk line | ${formatNumber(context?.invalidation, 4)} |\n\n## Completed model evidence\n\n${evidence}\n\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(consensusVisual)}[[/PLAINSTOCK_VISUAL]]\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(levelsVisual)}[[/PLAINSTOCK_VISUAL]]`,
         model: reports[0]?.model || "local-consensus",
         localFallback: true
       };
     }
 
-    const reason = conclusion === "BUY"
+    const reason = conclusion === "POSITIVE TREND"
       ? "The completed checks are positive."
-      : conclusion === "AVOID"
+      : conclusion === "WEAK TREND"
         ? "The completed checks show more serious warnings than positive evidence."
         : "The completed checks disagree, are incomplete, or need stronger evidence.";
     return {
-      text: `Research view: ${conclusion}\n\n${reason} PlainStock combined the available specialist votes automatically.\n\n## Current dashboard facts\n\n| What matters | Current reading |\n|---|---:|\n| Dashboard price signal | ${escapeHtml(context?.priceSignal || "Unavailable")} |\n| Price score | ${formatNumber(context?.score, 0)}/100 |\n| Latest price | ${formatNumber(context?.currentPrice, 2)} ${escapeHtml(context?.currency || "")} |\n| One-year change | ${formatPercent(context?.oneYearReturn)} |\n| Compared with market | ${formatPercent(context?.versusMarket)} |\n\n## Completed specialist evidence\n\n${evidence}\n\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(consensusVisual)}[[/PLAINSTOCK_VISUAL]]`,
+      text: `Research view: ${conclusion}\n\n${reason} PlainStock combined the available model checks automatically.\n\n## Current dashboard facts\n\n| What matters | Current reading |\n|---|---:|\n| Dashboard price trend | ${escapeHtml(context?.priceSignal || "Unavailable")} |\n| Price score | ${formatNumber(context?.score, 0)}/100 |\n| Latest price | ${formatNumber(context?.currentPrice, 2)} ${escapeHtml(context?.currency || "")} |\n| One-year change | ${formatPercent(context?.oneYearReturn)} |\n| Compared with market | ${formatPercent(context?.versusMarket)} |\n\n## Completed model evidence\n\n${evidence}\n\n[[PLAINSTOCK_VISUAL]]${JSON.stringify(consensusVisual)}[[/PLAINSTOCK_VISUAL]]`,
       model: reports[0]?.model || "local-consensus",
       localFallback: true
     };
@@ -1522,7 +1540,7 @@
       ? reports.map((report) => `## ${report.skill}\n${report.text}`).join("\n\n")
       : "No specialist reports were used in this mode.";
     const futuresPlainLanguage = mode === "futures"
-      ? " In visitor-facing text, translate LONG to BUY SETUP, SHORT to SELL SETUP, and NO_TRADE to WAIT. Call ATR typical movement, support a price floor, resistance a price ceiling, and invalidation a risk line. Never show the internal provider contract code."
+      ? " In visitor-facing text, translate LONG to UPWARD CONDITIONS, SHORT to DOWNWARD CONDITIONS, and NO_TRADE to NO CLEAR DIRECTION. Call ATR typical movement, support a price floor, resistance a price ceiling, and invalidation a risk line. Never show the internal provider contract code or issue a trade instruction."
       : "";
     const stockSourceCheck = mode === "stock"
       ? " For company facts, prefer official earnings material, investor-relations pages, and regulatory filings when available. Missing evidence must be disclosed, but no single source is a mandatory gate."
@@ -1582,8 +1600,8 @@
     setAgentActivity(`Combining ${reports.length} specialist findings…`);
     const missing = skills.filter((skill) => !reports.some((report) => report.skill === skill.name)).map((skill) => skill.name);
     const synthesisInstructions = mode === "stock"
-      ? `${sharedAssistantInstructions} You are the lead stock analyst. Use only the verified app data and specialist reports supplied below. Start with "Research view: BUY", "Research view: WAIT", or "Research view: AVOID", then one short reason. Treat it as a general research label, not personal advice. Show the three independent specialist votes and explain disagreements before reaching the final view; never fake unanimity. Keep the dashboard price signal distinct from company quality and valuation. Provide detailed sections for: plain-English conclusion; revenue and profit trend; cash flow quality; debt and liquidity; valuation and market expectations; strongest evidence; biggest risks; upcoming items to watch; and what could change the view. Include a compact table with periods, values, direction, and why each number matters. Official company material and regulatory filings may support the evidence when available, but no single source is required. Be conservative and disclose missing or conflicting figures. ${visualContractFor(mode)}`
-      : `${sharedAssistantInstructions} You are the lead futures analyst. Use only the verified price-history data and specialist reports supplied below. Refer to the friendly market name only; never expose or explain the internal provider contract code. Start with "Suggestion: BUY SETUP", "Suggestion: SELL SETUP", or "Suggestion: WAIT", followed by one short reason. Translate LONG to BUY SETUP, SHORT to SELL SETUP, and NO_TRADE to WAIT in all visitor-facing text. Show the three independent specialist votes and explain disagreements before reaching the final suggestion; never fake unanimity. Give detailed but simple sections for price direction, possible target zones, risk line, reward versus risk, event context, leverage risk, and what would cancel the setup. Call ATR "typical movement", support a "price floor", resistance a "price ceiling", and invalidation a "risk line". Include a compact price-level table. Targets are planning zones, not predictions. ${visualContractFor(mode)}`;
+      ? `${sharedAssistantInstructions} You are the lead stock researcher. Use only the verified app data and specialist reports supplied below. Start with "Research view: POSITIVE TREND", "Research view: MIXED TREND", or "Research view: WEAK TREND", then one short reason. Treat it as a price description, not personal advice. Show the three model checks and explain disagreements before reaching the final view; never imply that model calls are independent human analysts. Keep the dashboard price trend distinct from company quality and valuation. Provide detailed sections for: plain-English conclusion; revenue and profit trend; cash flow quality; debt and liquidity; valuation and market expectations; strongest evidence; biggest risks; upcoming items to watch; and what could change the view. Include a compact table with periods, values, direction, and why each number matters. Be conservative and disclose missing or conflicting figures. ${visualContractFor(mode)}`
+      : `${sharedAssistantInstructions} You are the lead futures researcher. Use only the verified price-history data and specialist reports supplied below. Refer to the friendly market name only; never expose or explain the internal provider contract code. Start with "Conditions: UPWARD", "Conditions: DOWNWARD", or "Conditions: NO CLEAR DIRECTION", followed by one short reason. Translate LONG to UPWARD CONDITIONS, SHORT to DOWNWARD CONDITIONS, and NO_TRADE to NO CLEAR DIRECTION in visitor-facing text. Show the three model checks and explain disagreements; never imply they are independent human analysts. Give simple sections for price direction, possible price zones, risk line, event context, leverage risk, and what would invalidate the observation. Call ATR "typical movement", support a "price floor", resistance a "price ceiling", and invalidation a "risk line". Include a compact price-level table. Possible zones are descriptive, not predictions or instructions. ${visualContractFor(mode)}`;
     const synthesisInput = [
       `Current date: ${currentDate}`,
       `Verified app data (JSON):\n${JSON.stringify(context)}`,

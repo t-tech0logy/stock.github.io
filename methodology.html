@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="The transparent PlainStock price-trend scoring methodology, weights, limits, and interpretation."
+    />
+    <meta name="robots" content="index,follow" />
+    <link
+      rel="canonical"
+      href="https://t-tech0logy.github.io/stock.github.io/methodology.html"
+    />
+    <title>Methodology — PlainStock</title>
+    <link rel="stylesheet" href="content.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html"
+        ><span class="brand-mark" aria-hidden="true">P</span
+        ><span
+          ><strong>PlainStock</strong
+          ><small>Stock research without the jargon</small></span
+        ></a
+      >
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="index.html">Research</a><a href="learn/index.html">Learn</a
+        ><a href="methodology.html" aria-current="page">Methodology</a
+        ><a href="about.html">About</a>
+      </nav>
+    </header>
+    <main class="content-main">
+      <section class="content-hero">
+        <p class="eyebrow">Transparent by design</p>
+        <h1>How the price-trend score is calculated.</h1>
+        <p>
+          The score summarizes six market-price questions. It is descriptive,
+          rules-based, and intentionally incomplete.
+        </p>
+      </section>
+      <div class="content-body">
+        <article class="article-copy">
+          <div class="concept-visual" aria-label="Price-trend score weights">
+            <strong>What contributes to the score</strong>
+            <div class="visual-bars">
+              <div class="visual-bar">
+                <span>Recent trend</span><b style="--value: 25%"></b
+                ><em>25%</em>
+              </div>
+              <div class="visual-bar">
+                <span>Longer trend</span><b style="--value: 25%"></b
+                ><em>25%</em>
+              </div>
+              <div class="visual-bar">
+                <span>Vs market</span><b style="--value: 20%"></b><em>20%</em>
+              </div>
+              <div class="visual-bar">
+                <span>Trading activity</span><b style="--value: 10%"></b
+                ><em>10%</em>
+              </div>
+              <div class="visual-bar">
+                <span>Yearly position</span><b style="--value: 10%"></b
+                ><em>10%</em>
+              </div>
+              <div class="visual-bar">
+                <span>Stability</span><b style="--value: 10%"></b><em>10%</em>
+              </div>
+            </div>
+          </div>
+          <div
+            class="concept-visual"
+            aria-label="How the score is built and read"
+          >
+            <strong>From market data to a simple reading</strong>
+            <div class="score-pipeline">
+              <div class="pipeline-step">
+                <i aria-hidden="true">1</i><b>Collect</b
+                ><span>Six price signals</span>
+              </div>
+              <div class="pipeline-arrow" aria-hidden="true">→</div>
+              <div class="pipeline-step">
+                <i aria-hidden="true">2</i><b>Weight</b
+                ><span>Each signal adds points</span>
+              </div>
+              <div class="pipeline-arrow" aria-hidden="true">→</div>
+              <div class="pipeline-step">
+                <i aria-hidden="true">3</i><b>Explain</b
+                ><span>Read the result with limits</span>
+              </div>
+            </div>
+            <div class="score-zones" aria-label="Score interpretation bands">
+              <div class="score-zone score-zone-weak">
+                <b>0–49</b><span>Weak</span>
+              </div>
+              <div class="score-zone score-zone-mixed">
+                <b>50–69</b><span>Mixed</span>
+              </div>
+              <div class="score-zone score-zone-positive">
+                <b>70–100</b><span>Positive</span>
+              </div>
+            </div>
+          </div>
+          <h2>The six components</h2>
+          <div class="signal-grid" aria-label="Six score components">
+            <div>
+              <i aria-hidden="true">↗</i><span>Recent<br />trend</span>
+            </div>
+            <div>
+              <i aria-hidden="true">〰</i><span>Longer<br />trend</span>
+            </div>
+            <div>
+              <i aria-hidden="true">⇄</i><span>Vs<br />market</span>
+            </div>
+            <div>
+              <i aria-hidden="true">▥</i><span>Trading<br />activity</span>
+            </div>
+            <div>
+              <i aria-hidden="true">◆</i><span>Yearly<br />position</span>
+            </div>
+            <div>
+              <i aria-hidden="true">≈</i><span>Price<br />stability</span>
+            </div>
+          </div>
+          <h3>1. Recent price trend · 25%</h3>
+          <p>
+            Measures approximately one- and three-month price changes. Stronger
+            sustained movement receives a higher score than falling or
+            indecisive movement.
+          </p>
+          <h3>2. Longer price trend · 25%</h3>
+          <p>
+            Compares the latest price with its 50-day and 200-day averages.
+            These averages smooth daily noise, but they react after the market
+            has already moved.
+          </p>
+          <h3>3. Wider-market comparison · 20%</h3>
+          <p>
+            Compares the investment with the S&amp;P 500 over the available
+            period. Outperformance can show relative strength; underperformance
+            can show that capital has found stronger alternatives elsewhere.
+          </p>
+          <h3>4. Trading activity · 10%</h3>
+          <p>
+            Checks whether recent volume supports the direction of the move.
+            Volume can add context, but it does not explain why people traded.
+          </p>
+          <h3>5. Yearly range position · 10%</h3>
+          <p>
+            Locates the current price between its approximate one-year low and
+            high. This describes positioning, not whether a stock is
+            fundamentally cheap or expensive.
+          </p>
+          <h3>6. Stability · 10%</h3>
+          <p>
+            Uses variability and drawdown to describe how bumpy the price
+            journey has been. Historical stability does not guarantee future
+            stability.
+          </p>
+          <h2>How to read the result</h2>
+          <ul>
+            <li>
+              <strong>70–100: Positive price trend.</strong> Several price
+              measures are currently supportive.
+            </li>
+            <li>
+              <strong>50–69: Mixed price trend.</strong> Evidence is divided,
+              incomplete, or not yet convincing.
+            </li>
+            <li>
+              <strong>Below 50: Weak price trend.</strong> Price direction or
+              stability currently warrants caution.
+            </li>
+          </ul>
+          <div class="plain-callout">
+            <strong>What the score does not include</strong>
+            <p>
+              Revenue, profit, cash flow, debt, competitive position, management
+              quality, valuation, tax, portfolio diversification, and your
+              personal financial circumstances.
+            </p>
+          </div>
+          <h2>Data quality and timing</h2>
+          <p>
+            The dashboard uses the latest data returned by its configured
+            provider. Prices may be delayed, incomplete, adjusted, or corrected
+            later. A missing component reduces confidence rather than being
+            treated as positive evidence.
+          </p>
+          <h2>Known limitations</h2>
+          <p>
+            Any fixed scoring model can oversimplify changing markets. Trend
+            measures can reverse quickly, moving averages lag, and a comparison
+            with the S&amp;P 500 may be unsuitable for some international
+            securities or asset classes. The output should begin research, not
+            end it.
+          </p>
+          <p class="legal-date">
+            Methodology version 1.0 · Updated 16 August 2026
+          </p>
+        </article>
+        <aside class="content-aside">
+          <strong>Methodology guide</strong><a href="#">Six components</a
+          ><a href="learn/moving-averages.html">Moving averages explained</a
+          ><a href="learn/volatility-drawdown.html">Volatility and drawdown</a
+          ><a href="disclaimer.html">Full disclaimer</a>
+        </aside>
+      </div>
+    </main>
+    <footer>
+      <div>
+        <strong>PlainStock</strong>
+        <p>Built for learning, not for telling you what to buy.</p>
+      </div>
+      <nav class="footer-links">
+        <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a
+        ><a href="disclaimer.html">Disclaimer</a
+        ><a href="contact.html">Contact</a>
+      </nav>
+    </footer>
+    <script src="site-nav.js"></script>
+  </body>
+</html>

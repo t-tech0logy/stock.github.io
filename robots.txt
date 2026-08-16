@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://t-tech0logy.github.io/stock.github.io/sitemap.xml

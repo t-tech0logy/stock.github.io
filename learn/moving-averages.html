@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="A plain-English explanation of 50-day and 200-day moving averages, their uses, and their limits."
+    />
+    <meta name="robots" content="index,follow" />
+    <title>Moving Averages Without the Jargon — PlainStock</title>
+    <link
+      rel="canonical"
+      href="https://t-tech0logy.github.io/stock.github.io/learn/moving-averages.html"
+    />
+    <link rel="stylesheet" href="../content.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><span class="brand-mark">P</span
+        ><span
+          ><strong>PlainStock</strong
+          ><small>Stock research without the jargon</small></span
+        ></a
+      >
+      <nav class="site-nav">
+        <a href="../index.html">Research</a
+        ><a href="index.html" aria-current="page">Learn</a
+        ><a href="../methodology.html">Methodology</a
+        ><a href="../about.html">About</a>
+      </nav>
+    </header>
+    <main class="content-main">
+      <section class="content-hero">
+        <p class="eyebrow">Price direction</p>
+        <h1>Moving averages without the jargon.</h1>
+        <p>
+          A moving average turns a noisy sequence of daily prices into a
+          smoother line. That makes direction easier to see, but it cannot
+          predict what comes next.
+        </p>
+      </section>
+      <div class="content-body">
+        <article class="article-copy">
+          <h2>The simple idea</h2>
+          <p>
+            A moving average smooths out daily price noise. It answers a basic
+            question: has the typical price been moving up or down?
+          </p>
+          <p>
+            A 50-day average uses the latest 50 closing prices. A 200-day
+            average uses 200, so it changes more slowly.
+          </p>
+          <div
+            class="concept-visual"
+            aria-label="Short and long moving-average comparison"
+          >
+            <strong>Short view reacts faster · long view moves slower</strong>
+            <div class="visual-bars">
+              <div class="visual-bar">
+                <span>50-day view</span><b style="--value: 78%"></b
+                ><em>Fast</em>
+              </div>
+              <div class="visual-bar">
+                <span>200-day view</span><b style="--value: 48%"></b
+                ><em>Slow</em>
+              </div>
+            </div>
+            <p class="visual-explanation">
+              <b>What this shows:</b> the 50-day line follows recent price
+              changes sooner. The 200-day line is steadier because each new day
+              has less influence on a much larger group of prices.
+            </p>
+          </div>
+          <h2>How to read it</h2>
+          <p>
+            A price above a rising average usually means the recent direction
+            has been upward. A price below a falling average usually means the
+            direction has been downward.
+          </p>
+          <div class="concept-visual" aria-label="Three moving-average signals">
+            <strong>Three common chart situations</strong>
+            <div class="visual-scenarios">
+              <div class="scenario-card scenario-up">
+                <i aria-hidden="true">↗</i><b>Above + rising</b
+                ><span>Recent direction is supportive</span>
+              </div>
+              <div class="scenario-card scenario-flat">
+                <i aria-hidden="true">→</i><b>Near + flat</b
+                ><span>The direction is unclear</span>
+              </div>
+              <div class="scenario-card scenario-down">
+                <i aria-hidden="true">↘</i><b>Below + falling</b
+                ><span>Recent direction is weak</span>
+              </div>
+            </div>
+            <p class="visual-explanation">
+              <b>How to use it:</b> treat these as descriptions of the past—not
+              automatic buy or sell instructions.
+            </p>
+          </div>
+          <div class="plain-callout">
+            <strong>It looks backward.</strong>
+            <p>
+              The line changes only after the price changes. It cannot predict
+              tomorrow and it is not the company's true value.
+            </p>
+          </div>
+          <h2>How PlainStock uses them</h2>
+          <p>
+            PlainStock checks both averages as one part of the score. No moving
+            average can decide whether a stock is good, cheap, or right for you.
+          </p>
+          <ul>
+            <li>Is the average rising, falling, or flat?</li>
+            <li>Is the latest price close to it or far away?</li>
+            <li>Does the real business support the trend?</li>
+          </ul>
+        </article>
+        <aside class="content-aside">
+          <strong>Continue learning</strong
+          ><a href="relative-strength.html">Relative strength</a
+          ><a href="trading-volume.html">Trading volume</a
+          ><a href="../methodology.html">PlainStock methodology</a>
+        </aside>
+      </div>
+    </main>
+    <footer>
+      <div>
+        <strong>PlainStock</strong>
+        <p>Educational research only.</p>
+      </div>
+      <nav class="footer-links">
+        <a href="../disclaimer.html">Disclaimer</a
+        ><a href="../privacy.html">Privacy</a>
+      </nav>
+    </footer>
+    <script src="../site-nav.js"></script>
+  </body>
+</html>

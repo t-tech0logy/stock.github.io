@@ -4,6 +4,8 @@
   const polygonApiKey = String(window.PLAINSTOCK_CONFIG?.polygonApiKey || "").trim();
   const polygonApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonApiRoot || "https://api.polygon.io").replace(/\/$/, "");
   const polygonExtraApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonExtraApiRoot || polygonApiRoot).replace(/\/$/, "");
+  const marketProxyRoot = String(window.PLAINSTOCK_CONFIG?.marketProxyRoot || "").replace(/\/$/, "");
+  const hasMarketConnection = Boolean(marketProxyRoot || polygonApiKey);
   const searchDelay = 650;
   const freeRequestLimit = 5;
   const requestWindowMs = 60_500;
@@ -156,11 +158,14 @@
 
   async function polygonRequest(path, parameters = {}, optional = false, options = {}) {
     await reservePolygonRequest(options.onWait);
-    const url = new URL(`${options.root || polygonApiRoot}${path}`);
+    const url = marketProxyRoot
+      ? new URL(`${marketProxyRoot}/market`)
+      : new URL(`${options.root || polygonApiRoot}${path}`);
+    if (marketProxyRoot) url.searchParams.set("path", path);
     Object.entries(parameters).forEach(([name, value]) => {
       if (value !== null && value !== undefined) url.searchParams.set(name, String(value));
     });
-    url.searchParams.set("apiKey", polygonApiKey);
+    if (!marketProxyRoot) url.searchParams.set("apiKey", polygonApiKey);
     const response = await fetch(url.toString(), { cache: "no-store" });
     let payload = null;
     try {
@@ -258,7 +263,7 @@
       dataMode: "polygon-free-market",
       sources: {
         prices: "Polygon adjusted daily aggregates",
-        priceUrl: `${polygonApiRoot}/v2/aggs/ticker/${encodedSymbol}`
+        priceUrl: marketProxyRoot ? null : `${polygonApiRoot}/v2/aggs/ticker/${encodedSymbol}`
       },
       benchmark: {
         symbol: "SPY",
@@ -647,27 +652,27 @@
   function decisionFor(analysis) {
     if (!Number.isFinite(analysis.overall)) {
       return {
-        signal: "WAIT",
+        signal: "MIXED TREND",
         status: "wait",
         note: "Not enough price data"
       };
     }
     if (analysis.overall >= 70) {
       return {
-        signal: "BUY",
+        signal: "POSITIVE TREND",
         status: "buy",
         note: "Company finances not included"
       };
     }
     if (analysis.overall >= 50) {
       return {
-        signal: "WAIT",
+        signal: "MIXED TREND",
         status: "wait",
         note: "Company finances not included"
       };
     }
     return {
-      signal: "AVOID",
+      signal: "WEAK TREND",
       status: "avoid",
       note: "Company finances not included"
     };
@@ -1337,7 +1342,7 @@
     elements.overallScore.textContent = "—";
     elements.confidenceBadge.textContent = "Comparing market";
     elements.verdictTitle.textContent = "Latest price ready. Finishing the full signal…";
-    elements.verdictSummary.textContent = "The price chart is ready. We are now comparing this investment with the S&P 500 before showing BUY, WAIT, or AVOID.";
+    elements.verdictSummary.textContent = "The price chart is ready. We are now comparing this investment with the S&P 500 before describing the trend as positive, mixed, or weak.";
     elements.decisionBadge.className = "decision-badge wait";
     elements.decisionSignal.textContent = "CHECKING";
     elements.decisionNote.textContent = "Waiting for the complete comparison";
@@ -1412,8 +1417,8 @@
     elements.dashboard.hidden = false;
     elements.dashboard.classList.add("loading");
     elements.message.hidden = false;
-    if (!polygonApiKey) {
-      elements.message.textContent = "Live search is not connected yet. Add your Polygon key in config.js, then reload the page.";
+    if (!hasMarketConnection) {
+      elements.message.textContent = "Live search is not connected yet. Configure the protected market-data service, then reload the page.";
       elements.dashboard.classList.remove("loading");
       state.defaultLoadInProgress = false;
       return;
@@ -1502,9 +1507,9 @@
       closeSearchResults();
       return [];
     }
-    if (!polygonApiKey) {
+    if (!hasMarketConnection) {
       state.searchMatches = [];
-      elements.searchResults.innerHTML = `<div class="search-empty"><strong>Live search is not connected</strong><span>Add the Polygon API key in config.js and reload.</span></div>`;
+      elements.searchResults.innerHTML = `<div class="search-empty"><strong>Live search is not connected</strong><span>Configure the protected market-data service and reload.</span></div>`;
       elements.searchResults.classList.add("open");
       elements.search.setAttribute("aria-expanded", "true");
       return [];
@@ -1704,6 +1709,9 @@
     },
     getMarketApiKey() {
       return polygonApiKey;
+    },
+    getMarketProxyRoot() {
+      return marketProxyRoot;
     },
     reserveMarketRequest(onWait) {
       return reservePolygonRequest(onWait);

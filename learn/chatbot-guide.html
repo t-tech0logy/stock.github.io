@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="A visual beginner's guide to asking useful questions in the PlainStock Assistant."
+    />
+    <meta name="robots" content="index,follow" />
+    <title>How to Use the PlainStock Assistant</title>
+    <link
+      rel="canonical"
+      href="https://t-tech0logy.github.io/stock.github.io/learn/chatbot-guide.html"
+    />
+    <link rel="stylesheet" href="../content.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="../index.html" aria-label="PlainStock home"
+        ><span class="brand-mark" aria-hidden="true">P</span
+        ><span
+          ><strong>PlainStock</strong
+          ><small>Stock research without the jargon</small></span
+        ></a
+      >
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="../index.html">Research</a
+        ><a href="index.html" aria-current="page">Learn</a
+        ><a href="../methodology.html">Methodology</a
+        ><a href="../about.html">About</a>
+      </nav>
+    </header>
+    <main class="content-main">
+      <section class="content-hero">
+        <p class="eyebrow">Assistant guide</p>
+        <h1>Ask better questions. Get clearer answers.</h1>
+        <p>
+          PlainStock Assistant can explain investing ideas, discuss the stock
+          open on your dashboard, or describe selected futures-market
+          conditions.
+        </p>
+      </section>
+      <div class="content-body">
+        <article class="article-copy">
+          <div
+            class="concept-visual"
+            aria-label="Illustration of the PlainStock Assistant"
+          >
+            <strong>What you will see</strong>
+            <div class="chatbot-demo" aria-hidden="true">
+              <div class="chatbot-demo-head">
+                <span class="assistant-avatar">P<i></i></span>
+                <span
+                  ><b>PlainStock Assistant</b><small>Answer ready</small></span
+                >
+                <em>×</em>
+              </div>
+              <div class="chatbot-demo-context">
+                <i></i
+                ><span
+                  ><small>Selected dashboard stock</small
+                  ><b>AAPL · Positive trend</b></span
+                >
+              </div>
+              <div class="chatbot-demo-chat">
+                <p>What does this score mean?</p>
+                <div>
+                  <span>P</span>
+                  <p>
+                    The price evidence is positive, but the score does not tell
+                    us whether the shares are cheap.
+                  </p>
+                </div>
+              </div>
+              <div class="chatbot-demo-prompts">
+                <span>Financial health</span><span>Biggest risks</span>
+              </div>
+              <div class="chatbot-demo-composer">
+                <div class="chatbot-demo-input">
+                  <span>Ask a question…</span><b>↑</b>
+                </div>
+                <div class="chatbot-demo-mode-row">
+                  <strong><small>Mode</small> Normal <i>⌄</i></strong>
+                  <span><i aria-hidden="true">↖</i> Change mode here</span>
+                </div>
+              </div>
+            </div>
+            <p class="visual-explanation">
+              <b>Tip:</b> the assistant button sits at the bottom-right of the
+              Research page. Suggested questions are the easiest place to begin.
+            </p>
+          </div>
+
+          <h2>Use it in four steps</h2>
+          <div
+            class="research-roadmap chatbot-roadmap"
+            aria-label="Four steps for using the assistant"
+          >
+            <div><i>1</i><b>Open</b><span>Tap “Ask PlainStock”</span></div>
+            <div><i>2</i><b>Choose</b><span>Select the right mode</span></div>
+            <div><i>3</i><b>Ask</b><span>Use a suggestion or type</span></div>
+            <div>
+              <i>4</i><b>Check</b><span>Review limits and sources</span>
+            </div>
+          </div>
+
+          <h2>Choose the right mode</h2>
+          <div
+            id="change-mode"
+            class="concept-visual mode-switch-visual"
+            aria-label="How to change assistant mode"
+          >
+            <strong>Where to change mode</strong>
+            <figure class="real-mode-screenshot">
+              <img
+                src="chatbot-mode-location.png"
+                alt="Actual PlainStock chatbot showing the Mode Normal button below the question box, beside the Send arrow"
+                width="327"
+                height="352"
+              />
+              <figcaption>
+                <i aria-hidden="true">↑</i>
+                <span
+                  ><b>Tap “Mode · Normal” here.</b> It is directly below the
+                  question box and beside the black Send arrow.</span
+                >
+              </figcaption>
+            </figure>
+            <p class="visual-explanation">
+              <b>This is the real chatbot:</b> tap the mode button, choose
+              Normal, Stock Analytics, or Futures, then check that the button
+              displays your new choice before asking the question.
+            </p>
+          </div>
+          <div class="assistant-mode-guide">
+            <div class="mode-normal">
+              <i aria-hidden="true">✦</i><b>Normal</b
+              ><span>Ask general investing questions in simple language.</span
+              ><small>Try: “Explain drawdown with an example.”</small>
+            </div>
+            <div class="mode-stock">
+              <i aria-hidden="true">↗</i><b>Stock Analytics</b
+              ><span
+                >Ask about the stock currently loaded on the dashboard.</span
+              ><small>Try: “What are the biggest risks?”</small>
+            </div>
+            <div class="mode-futures">
+              <i aria-hidden="true">⌁</i><b>Futures</b
+              ><span
+                >Choose a market and time view before requesting
+                conditions.</span
+              ><small>Try: “Explain these target zones.”</small>
+            </div>
+          </div>
+          <p class="visual-explanation standalone-explanation">
+            <b>Remember:</b> Stock Analytics needs a stock to be loaded first.
+            Futures mode needs you to choose a market before it can describe
+            recent conditions.
+          </p>
+
+          <section class="mode-walkthrough mode-walkthrough-normal">
+            <div class="mode-walkthrough-heading">
+              <span><i aria-hidden="true">✦</i> Mode 1</span>
+              <h2>Normal: learn or clarify an idea</h2>
+              <p>
+                Use Normal when your question is not tied to one selected stock
+                or futures market.
+              </p>
+            </div>
+            <div
+              class="mode-screen"
+              aria-label="Example conversation in Normal mode"
+            >
+              <div class="mode-screen-bar">
+                <span>✦</span><b>Normal</b><small>General questions</small>
+              </div>
+              <div class="mode-screen-body">
+                <p class="screen-user">Explain volatility like I am new.</p>
+                <div class="screen-answer">
+                  <i>P</i>
+                  <p>
+                    Volatility describes how widely and quickly a price moves up
+                    and down.
+                  </p>
+                </div>
+                <div class="screen-chips">
+                  <span>Explain a term</span><span>Compare ideas</span>
+                </div>
+              </div>
+            </div>
+            <div class="mode-use-grid">
+              <div>
+                <i aria-hidden="true">?</i><b>Best for</b
+                ><span
+                  >Definitions, comparisons, and learning how a measure
+                  works.</span
+                >
+              </div>
+              <div>
+                <i aria-hidden="true">✎</i><b>How to ask</b
+                ><span
+                  >Name the topic and say how simple or detailed you want
+                  it.</span
+                >
+              </div>
+              <div>
+                <i aria-hidden="true">!</i><b>Remember</b
+                ><span
+                  >It does not know your full personal financial
+                  situation.</span
+                >
+              </div>
+            </div>
+            <p class="visual-explanation standalone-explanation">
+              <b>Good examples:</b> “What is a moving average?”, “Compare
+              volatility and drawdown”, or “Why does diversification matter?”
+            </p>
+          </section>
+
+          <section class="mode-walkthrough mode-walkthrough-stock">
+            <div class="mode-walkthrough-heading">
+              <span><i aria-hidden="true">↗</i> Mode 2</span>
+              <h2>Stock Analytics: discuss the stock on screen</h2>
+              <p>
+                This mode reads the stock currently loaded on the Research
+                dashboard. Load the company before opening your conversation.
+              </p>
+            </div>
+            <div
+              class="mode-prep-flow"
+              aria-label="Steps before using Stock Analytics"
+            >
+              <div>
+                <i>1</i><b>Search</b><span>Enter a ticker such as AAPL</span>
+              </div>
+              <em>→</em>
+              <div>
+                <i>2</i><b>Wait</b><span>Let the dashboard finish loading</span>
+              </div>
+              <em>→</em>
+              <div>
+                <i>3</i><b>Select</b><span>Choose Stock Analytics</span>
+              </div>
+            </div>
+            <div
+              class="mode-screen"
+              aria-label="Example Stock Analytics conversation"
+            >
+              <div class="mode-screen-bar stock-bar">
+                <span>↗</span><b>Stock Analytics</b
+                ><small>AAPL · selected dashboard stock</small>
+              </div>
+              <div class="mode-screen-body">
+                <div class="stock-snapshot-mini">
+                  <span><small>Price signal</small><b>Positive</b></span
+                  ><strong>74<small>/100</small></strong>
+                </div>
+                <p class="screen-user">Give me the full simple analysis.</p>
+                <div class="screen-answer">
+                  <i>P</i>
+                  <p>
+                    I’ll separate the price trend from business health,
+                    valuation, and risks.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="mode-use-grid">
+              <div>
+                <i aria-hidden="true">◎</i><b>Full analysis</b
+                ><span
+                  >Ask for a simple summary of the available evidence.</span
+                >
+              </div>
+              <div>
+                <i aria-hidden="true">$</i><b>Financial health</b
+                ><span
+                  >Ask about sales, profit, cash flow, debt, or valuation.</span
+                >
+              </div>
+              <div>
+                <i aria-hidden="true">!</i><b>Biggest risks</b
+                ><span>Ask what could weaken the current research view.</span>
+              </div>
+            </div>
+            <p class="visual-explanation standalone-explanation">
+              <b>Check the context label:</b> it should show the ticker you mean
+              to discuss. A positive price trend does not prove that the
+              business is healthy or that the shares are cheap.
+            </p>
+          </section>
+
+          <section class="mode-walkthrough mode-walkthrough-futures">
+            <div class="mode-walkthrough-heading">
+              <span><i aria-hidden="true">⌁</i> Mode 3</span>
+              <h2>Futures: describe recent market conditions</h2>
+              <p>
+                Choose a market and time view first. The assistant then
+                describes direction, possible price zones, and a risk line.
+              </p>
+            </div>
+            <div
+              class="futures-screen"
+              aria-label="Example Futures mode controls and result"
+            >
+              <div class="futures-screen-controls">
+                <small>Choose a market</small>
+                <div>
+                  <b>S&amp;P 500</b><span>Nasdaq 100</span><span>Gold</span
+                  ><span>Crude Oil</span>
+                </div>
+                <label
+                  ><span>Time view</span
+                  ><strong>Daily — bigger picture⌄</strong></label
+                >
+              </div>
+              <div class="futures-screen-result">
+                <span><small>Recent conditions</small><b>UPWARD</b></span>
+                <div>
+                  <i style="--level: 35%"></i><i style="--level: 46%"></i
+                  ><i style="--level: 42%"></i><i style="--level: 63%"></i
+                  ><i style="--level: 76%"></i><i style="--level: 88%"></i>
+                </div>
+                <p><span>Possible zones</span><b>Not guaranteed prices</b></p>
+              </div>
+            </div>
+            <div
+              class="time-view-grid"
+              aria-label="Meaning of futures time views"
+            >
+              <div><b>Daily</b><span>Bigger picture</span></div>
+              <div><b>Hourly</b><span>Recent direction</span></div>
+              <div><b>15 min</b><span>Short-term view</span></div>
+              <div><b>5 min</b><span>Very short-term, more noise</span></div>
+            </div>
+            <p class="visual-explanation standalone-explanation">
+              <b>How to use the result:</b> “Upward”, “Downward”, or “No clear
+              direction” describes recent price evidence. Target zones and the
+              risk line are planning references—not predictions or instructions
+              to trade.
+            </p>
+          </section>
+
+          <h2>A useful question has three parts</h2>
+          <div
+            class="prompt-formula"
+            aria-label="Formula for a useful chatbot question"
+          >
+            <div><small>1 · Topic</small><b>“This stock’s debt”</b></div>
+            <span>+</span>
+            <div><small>2 · Task</small><b>“Explain the trend”</b></div>
+            <span>+</span>
+            <div><small>3 · Style</small><b>“In simple terms”</b></div>
+          </div>
+          <div class="prompt-result">
+            <small>Complete question</small>
+            <p>
+              “Explain this stock’s debt trend in simple terms and tell me what
+              I should verify.”
+            </p>
+          </div>
+
+          <div class="plain-callout">
+            <strong>Use answers as a research starting point.</strong>
+            <p>
+              The assistant can misunderstand a question or use incomplete
+              information. Check important numbers and never treat a trend,
+              target zone, or AI answer as a guaranteed outcome or personal
+              financial instruction.
+            </p>
+          </div>
+        </article>
+        <aside class="content-aside">
+          <strong>Continue learning</strong
+          ><a href="../index.html">Open the Research dashboard</a
+          ><a href="price-vs-business.html">Price vs business quality</a
+          ><a href="../methodology.html">How the score works</a>
+        </aside>
+      </div>
+    </main>
+    <footer>
+      <div>
+        <strong>PlainStock</strong>
+        <p>Educational research only.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="../disclaimer.html">Disclaimer</a
+        ><a href="../privacy.html">Privacy</a>
+      </nav>
+    </footer>
+    <script src="../site-nav.js"></script>
+  </body>
+</html>
