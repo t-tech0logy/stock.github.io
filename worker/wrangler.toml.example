@@ -3,10 +3,11 @@ main = "worker.js"
 compatibility_date = "2026-08-16"
 
 [vars]
-ALLOWED_ORIGINS = "https://t-tech0logy.github.io,http://localhost:8000"
+ALLOWED_ORIGINS = "https://t-tech0logy.github.io,http://localhost:8000,http://127.0.0.1:8000"
 MARKET_API_ROOT = "https://api.massive.com"
 GEMINI_MODELS = "gemini-2.5-flash-lite"
 
 # Add credentials through secret storage, never in this file:
-# npx wrangler secret put MARKET_API_KEY
-# npx wrangler secret put GEMINI_API_KEY
+# Values must be Base64 encoded before they are stored:
+# npx wrangler secret put MARKET_API_KEY_BASE64
+# npx wrangler secret put GEMINI_API_KEY_BASE64

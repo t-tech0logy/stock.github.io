@@ -16,6 +16,18 @@ const ALLOWED_MARKET_PARAMETERS = new Set([
   "product_code", "type", "date", "resolution"
 ]);
 
+function decodeBase64Secret(value) {
+  const encoded = String(value || "").trim();
+  if (!encoded) return "";
+  try {
+    const decoded = atob(encoded);
+    if (!decoded || /[\u0000-\u001f\u007f]/.test(decoded)) return "";
+    return decoded;
+  } catch {
+    return "";
+  }
+}
+
 function allowedOrigins(env) {
   return String(env.ALLOWED_ORIGINS || "")
     .split(",")
@@ -64,7 +76,7 @@ function withinRateLimit(request, route, limit, windowMs = 60_000) {
   return true;
 }
 
-function safeMarketUrl(requestUrl, env) {
+function safeMarketUrl(requestUrl, env, marketApiKey) {
   const path = requestUrl.searchParams.get("path") || "";
   if (!MARKET_PATHS.some((pattern) => pattern.test(path))) return null;
   const provider = new URL(`${String(env.MARKET_API_ROOT || "https://api.massive.com").replace(/\/$/, "")}${path}`);
@@ -74,14 +86,15 @@ function safeMarketUrl(requestUrl, env) {
     if (value.length > 100) return null;
     provider.searchParams.append(name, value);
   }
-  provider.searchParams.set("apiKey", env.MARKET_API_KEY);
+  provider.searchParams.set("apiKey", marketApiKey);
   return provider;
 }
 
 async function marketResponse(request, env) {
-  if (!env.MARKET_API_KEY) return json(request, env, { error: "Market data is not configured." }, 503);
+  const marketApiKey = decodeBase64Secret(env.MARKET_API_KEY_BASE64);
+  if (!marketApiKey) return json(request, env, { error: "Market data is not configured." }, 503);
   if (!withinRateLimit(request, "market", 30)) return json(request, env, { error: "Too many requests. Try again shortly." }, 429);
-  const providerUrl = safeMarketUrl(new URL(request.url), env);
+  const providerUrl = safeMarketUrl(new URL(request.url), env, marketApiKey);
   if (!providerUrl) return json(request, env, { error: "Unsupported market-data request." }, 400);
 
   const cache = caches.default;
@@ -109,7 +122,8 @@ function requestTextSize(value) {
 }
 
 async function assistantResponse(request, env) {
-  if (!env.GEMINI_API_KEY) return json(request, env, { error: "Assistant service is not configured." }, 503);
+  const geminiApiKey = decodeBase64Secret(env.GEMINI_API_KEY_BASE64);
+  if (!geminiApiKey) return json(request, env, { error: "Assistant service is not configured." }, 503);
   if (!withinRateLimit(request, "assistant", 20)) return json(request, env, { error: "Assistant limit reached. Try again shortly." }, 429);
   if (Number(request.headers.get("Content-Length") || 0) > 80_000) return json(request, env, { error: "Request is too large." }, 413);
 
@@ -135,7 +149,7 @@ async function assistantResponse(request, env) {
 
   const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
     body: JSON.stringify(input.request)
   });
   const payload = await upstream.text();

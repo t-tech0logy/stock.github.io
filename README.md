@@ -16,10 +16,19 @@ Never add provider credentials to `config.js`, `assistant-config.js`, HTML, or b
 
 1. Copy `worker/wrangler.toml.example` to `worker/wrangler.toml`.
 2. Set the correct production and local origins in `ALLOWED_ORIGINS`.
-3. Add `MARKET_API_KEY` and `GEMINI_API_KEY` through the hosting provider's secret-storage command or dashboard.
+3. Base64-encode each test key, then store the results as `MARKET_API_KEY_BASE64` and `GEMINI_API_KEY_BASE64` through the hosting provider's secret-storage command or dashboard. The Worker decodes them only when making an upstream request.
 4. Deploy the Worker.
 5. Put the Worker URL in `marketProxyRoot` and `assistantProxyRoot` in the two public configuration files.
 6. Test rate limits, allowed routes, provider quotas, and error responses before publishing.
+
+PowerShell encoding example (the entered key is not written into the command history):
+
+```powershell
+$plainstockRawKey = Read-Host "API key"
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($plainstockRawKey))
+```
+
+Copy the resulting value into `npx wrangler secret put MARKET_API_KEY_BASE64` or `npx wrangler secret put GEMINI_API_KEY_BASE64`. Base64 is an encoding requirement here, not encryption; the Worker secret store provides the actual confidentiality.
 
 The included in-memory limiter reduces casual abuse but is not globally durable. A production launch should also enable the host's edge rate-limiting product and hard provider quotas.
 
