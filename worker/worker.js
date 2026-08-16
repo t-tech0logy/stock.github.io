@@ -135,7 +135,7 @@ async function assistantResponse(request, env) {
   }
   if (requestTextSize(input) > 80_000) return json(request, env, { error: "Request is too large." }, 413);
 
-  const allowedModels = String(env.GEMINI_MODELS || "gemini-2.5-flash-lite")
+  const allowedModels = String(env.GEMINI_MODELS || "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3-flash-preview,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.1-pro-preview,gemini-2.5-pro")
     .split(",").map((model) => model.trim()).filter(Boolean);
   const model = String(input.model || "");
   if (!allowedModels.includes(model)) return json(request, env, { error: "Unsupported assistant model." }, 400);

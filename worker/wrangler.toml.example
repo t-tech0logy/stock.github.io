@@ -5,7 +5,7 @@ compatibility_date = "2026-08-16"
 [vars]
 ALLOWED_ORIGINS = "https://t-tech0logy.github.io,http://localhost:8000,http://127.0.0.1:8000"
 MARKET_API_ROOT = "https://api.massive.com"
-GEMINI_MODELS = "gemini-2.5-flash-lite"
+GEMINI_MODELS = "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3-flash-preview,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.1-pro-preview,gemini-2.5-pro"
 
 # Add credentials through secret storage, never in this file:
 # Values must be Base64 encoded before they are stored:
