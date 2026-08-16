@@ -157,15 +157,22 @@
     return "neutral";
   }
 
-  function renderMarkdown(text) {
+  function renderMarkdown(text, options = {}) {
     const lines = String(text || "").replace(/\r/g, "").split("\n");
     const output = [];
+    const dashboard = options.dashboard === true;
     let index = 0;
     let listType = null;
+    let sectionOpen = false;
 
     const closeList = () => {
       if (listType) output.push(`</${listType}>`);
       listType = null;
+    };
+
+    const closeSection = () => {
+      if (sectionOpen) output.push("</section>");
+      sectionOpen = false;
     };
 
     while (index < lines.length) {
@@ -186,7 +193,7 @@
           index += 1;
         }
         output.push(`<div class="assistant-table-wrap"><table><thead><tr>${headings.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell, cellIndex) => {
-          const tone = cellIndex ? tableValueTone(cell) : "neutral";
+          const tone = cellIndex === 1 ? tableValueTone(cell) : "neutral";
           return `<td${tone === "neutral" ? "" : ` class="assistant-signal-cell ${tone}"`}>${inlineMarkdown(cell)}</td>`;
         }).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
@@ -194,7 +201,19 @@
       const heading = line.match(/^(#{2,4})\s+(.+)/);
       if (heading) {
         closeList();
-        output.push(`<h4 class="${headingTone(heading[2])}">${inlineMarkdown(heading[2])}</h4>`);
+        const tone = headingTone(heading[2]);
+        if (dashboard) {
+          closeSection();
+          const icon = tone === "good" ? "✓" : tone === "bad" ? "!" : tone === "warn" ? "~" : "•";
+          output.push(`<section class="assistant-report-section ${tone}"><header><span aria-hidden="true">${icon}</span><h4>${inlineMarkdown(heading[2])}</h4></header>`);
+          sectionOpen = true;
+        } else {
+          output.push(`<h4 class="${tone}">${inlineMarkdown(heading[2])}</h4>`);
+        }
+        index += 1;
+        continue;
+      }
+      if (/^---+$/.test(line)) {
         index += 1;
         continue;
       }
@@ -216,7 +235,9 @@
       index += 1;
     }
     closeList();
-    return output.join("");
+    closeSection();
+    const content = output.join("");
+    return dashboard ? `<div class="assistant-report-dashboard">${content}</div>` : content;
   }
 
   function decisionMeta(text, mode) {
@@ -232,13 +253,13 @@
     if (!lead) return null;
 
     if (mode === "stock") {
-      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*AVOID/.test(lead)) {
+      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*(?:WEAK TREND|AVOID)/.test(lead)) {
         return { tone: "bad", label: "WEAK TREND", meaning: "Important price warnings outweigh the positive evidence right now." };
       }
-      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*BUY/.test(lead)) {
+      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*(?:POSITIVE TREND|BUY)/.test(lead)) {
         return { tone: "good", label: "POSITIVE TREND", meaning: "The available price evidence is currently positive." };
       }
-      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*WAIT/.test(lead)) {
+      if (/(?:RESEARCH VIEW|SIMPLE CONCLUSION[^:]*|PRICE SIGNAL)\s*:\s*(?:MIXED TREND|WAIT)/.test(lead)) {
         return { tone: "warn", label: "MIXED TREND", meaning: "The evidence is mixed or incomplete, so more confirmation is needed." };
       }
     }
@@ -1487,7 +1508,7 @@
   function presentAiResult(result, mode = state.mode) {
     const presentation = extractPresentation(result.text);
     const visuals = mode === "stock" ? stockResponseVisuals(presentation.visuals) : presentation.visuals;
-    const answer = `${renderMarkdown(presentation.text)}${renderVisuals(visuals)}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
+    const answer = `${renderMarkdown(presentation.text, { dashboard: mode === "stock" })}${renderVisuals(visuals)}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
     addMessage("assistant", answer, { mode, trusted: true, rawText: presentation.text, label: result.label || state.lastModel });
   }
 
