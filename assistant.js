@@ -30,7 +30,7 @@
   };
   const keyCooldownMs = Math.max(10_000, Number(config.keyCooldownMs) || 60_000);
   const responseCacheTtlMs = Math.max(60_000, Number(config.responseCacheTtlMs) || 15 * 60_000);
-  const responseCachePrefix = "plainstock-assistant-v7:";
+  const responseCachePrefix = "plainstock-assistant-v8:";
   const keyCooldowns = new Map();
   const modelKeyCooldowns = new Map();
   const keyInFlight = new Map();
@@ -425,6 +425,50 @@
       if (visual?.kind === "balance") return renderBalanceVisual(visual);
       return "";
     }).join("");
+  }
+
+  function stockResponseVisuals(modelVisuals = []) {
+    const visuals = Array.isArray(modelVisuals) ? [...modelVisuals] : [];
+    const context = compactStockContext(stockSnapshot());
+    if (!context) return visuals;
+
+    const scoreItems = [
+      ["Overall price signal", context.priceSignal, context.score, "The combined dashboard reading."],
+      ["Recent trend", null, context.recentTrendScore, "How recent price movement is behaving."],
+      ["Long-term trend", null, context.longTermScore, "How the longer price direction is behaving."],
+      ["Versus the market", null, context.marketComparisonScore, "Whether price performance is keeping up with the benchmark."],
+      ["Volume support", null, context.volumeSupportScore, "Whether trading activity supports the price move."],
+      ["Price stability", null, context.stabilityScore, "How steady the price movement has been."]
+    ].filter((item) => Number.isFinite(visualNumber(item[2])));
+
+    if (scoreItems.length && !visuals.some((visual) => visual?.kind === "comparison")) {
+      visuals.unshift({
+        kind: "comparison",
+        title: `${context.symbol || "Stock"} dashboard evidence`,
+        items: scoreItems.map(([label, display, score, note]) => ({
+          label,
+          display: display || `${Math.round(score)}/100`,
+          score,
+          tone: scoreTone(score).className,
+          note
+        }))
+      });
+    }
+
+    const hasExplanationDiagram = visuals.some((visual) => ["flow", "risk-map", "timeline", "balance"].includes(visual?.kind));
+    if (!hasExplanationDiagram) {
+      visuals.push({
+        kind: "flow",
+        title: "How Stock Analytics builds this view",
+        items: [
+          { label: "Price evidence", note: "Checks trend, market comparison, volume and stability.", tone: scoreTone(context.score).className },
+          { label: "Financial health", note: "Checks reported growth, profit, cash flow and debt.", tone: "neutral" },
+          { label: "Valuation and risk", note: "Checks expectations, valuation evidence and major risks.", tone: "neutral" },
+          { label: "Research view", note: "Combines the supported evidence and explains uncertainty.", tone: "neutral" }
+        ]
+      });
+    }
+    return visuals.slice(0, 4);
   }
 
   function safeSourceLink(source) {
@@ -1410,7 +1454,8 @@
 
   function presentAiResult(result, mode = state.mode) {
     const presentation = extractPresentation(result.text);
-    const answer = `${renderMarkdown(presentation.text)}${renderVisuals(presentation.visuals)}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
+    const visuals = mode === "stock" ? stockResponseVisuals(presentation.visuals) : presentation.visuals;
+    const answer = `${renderMarkdown(presentation.text)}${renderVisuals(visuals)}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
     addMessage("assistant", answer, { mode, trusted: true, rawText: presentation.text, label: result.label || state.lastModel });
   }
 
