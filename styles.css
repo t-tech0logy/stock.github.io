@@ -3021,6 +3021,29 @@ body.assistant-fullscreen-open {
   font-weight: 800;
 }
 
+.assistant-table-wrap td.assistant-signal-cell {
+  font-weight: 800;
+  box-shadow: inset 3px 0 #87928a;
+}
+
+.assistant-table-wrap td.assistant-signal-cell.good {
+  color: #12683d;
+  background: #edf8f1;
+  box-shadow: inset 3px 0 #2c9961;
+}
+
+.assistant-table-wrap td.assistant-signal-cell.warn {
+  color: #895817;
+  background: #fff7e7;
+  box-shadow: inset 3px 0 #d99a35;
+}
+
+.assistant-table-wrap td.assistant-signal-cell.bad {
+  color: #963b36;
+  background: #fff0ee;
+  box-shadow: inset 3px 0 #d85b54;
+}
+
 .assistant-card-note {
   color: var(--muted);
   font-size: 10px;
@@ -3126,6 +3149,113 @@ body.assistant-fullscreen-open {
 .assistant-consensus-grid article > strong,
 .assistant-consensus-grid article > small {
   display: block;
+}
+
+.assistant-donut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.assistant-donut-grid article {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dfe3db;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+}
+
+.assistant-donut {
+  --donut-color: #78847c;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  padding: 7px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--donut-color) var(--donut-score), #e7ebe5 0);
+}
+
+.assistant-donut-grid article.good .assistant-donut {
+  --donut-color: #2c9961;
+}
+
+.assistant-donut-grid article.warn .assistant-donut {
+  --donut-color: #d99a35;
+}
+
+.assistant-donut-grid article.bad .assistant-donut {
+  --donut-color: #d85b54;
+}
+
+.assistant-donut > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  color: #354139;
+  background: #fff;
+  text-align: center;
+}
+
+.assistant-donut > span strong,
+.assistant-donut > span small,
+.assistant-donut-copy > span,
+.assistant-donut-copy > strong,
+.assistant-donut-copy > small {
+  display: block;
+}
+
+.assistant-donut > span strong {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.assistant-donut > span small {
+  margin-top: 2px;
+  color: var(--soft-muted);
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.assistant-donut-copy {
+  min-width: 0;
+}
+
+.assistant-donut-copy > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.assistant-donut-copy > strong {
+  margin-top: 2px;
+  color: #354139;
+  font-size: 11px;
+}
+
+.assistant-donut-grid article.good .assistant-donut-copy > strong {
+  color: #167044;
+}
+
+.assistant-donut-grid article.warn .assistant-donut-copy > strong {
+  color: #95601d;
+}
+
+.assistant-donut-grid article.bad .assistant-donut-copy > strong {
+  color: #a33f39;
+}
+
+.assistant-donut-copy > small {
+  margin-top: 4px;
+  color: var(--soft-muted);
+  font-size: 8px;
+  line-height: 1.35;
 }
 
 .assistant-consensus-grid article > span {

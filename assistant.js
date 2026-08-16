@@ -140,6 +140,23 @@
     return "neutral";
   }
 
+  function tableValueTone(text) {
+    const value = String(text || "").replace(/[*_`]/g, "").trim().toLowerCase();
+    const score = value.match(/(-?\d+(?:\.\d+)?)\s*\/\s*100/);
+    if (score) {
+      const number = Number(score[1]);
+      if (number >= 70) return "good";
+      if (number >= 50) return "warn";
+      return "bad";
+    }
+    if (/positive trend|excellent|strong|healthy|improving|upward|ahead|beating|positive|rising/.test(value)) return "good";
+    if (/weak trend|cautious|warning|declin|downward|lagging|negative|red flag|high risk/.test(value)) return "bad";
+    if (/mixed trend|mixed|uncertain|watch|moderate|neutral|unavailable/.test(value)) return "warn";
+    if (/^\+\d+(?:\.\d+)?%$/.test(value)) return "good";
+    if (/^−\d+(?:\.\d+)?%$|^-\d+(?:\.\d+)?%$/.test(value)) return "bad";
+    return "neutral";
+  }
+
   function renderMarkdown(text) {
     const lines = String(text || "").replace(/\r/g, "").split("\n");
     const output = [];
@@ -168,7 +185,10 @@
           rows.push(tableCells(lines[index]));
           index += 1;
         }
-        output.push(`<div class="assistant-table-wrap"><table><thead><tr>${headings.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+        output.push(`<div class="assistant-table-wrap"><table><thead><tr>${headings.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell, cellIndex) => {
+          const tone = cellIndex ? tableValueTone(cell) : "neutral";
+          return `<td${tone === "neutral" ? "" : ` class="assistant-signal-cell ${tone}"`}>${inlineMarkdown(cell)}</td>`;
+        }).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
       }
       const heading = line.match(/^(#{2,4})\s+(.+)/);
@@ -326,6 +346,17 @@
   function renderComparisonVisual(visual) {
     const items = Array.isArray(visual.items) ? visual.items.slice(0, 6) : [];
     if (!items.length) return "";
+    if (visual.layout === "donut") {
+      return `
+        <section class="assistant-data-visual assistant-comparison-visual assistant-donut-visual">
+          <header><div><small>At a glance</small><strong>${escapeHtml(visual.title || "Simple comparison")}</strong></div></header>
+          <div class="assistant-donut-grid">${items.map((item) => {
+            const score = Math.max(0, Math.min(100, visualNumber(item?.score) ?? 50));
+            const tone = visualTone(item?.tone);
+            return `<article class="${tone}"><div class="assistant-donut" style="--donut-score:${score * 3.6}deg"><span><strong>${Math.round(score)}</strong><small>/100</small></span></div><div class="assistant-donut-copy"><span>${escapeHtml(item?.label || "Metric")}</span><strong>${escapeHtml(item?.display || `${Math.round(score)}/100`)}</strong>${item?.note ? `<small>${escapeHtml(item.note)}</small>` : ""}</div></article>`;
+          }).join("")}</div>
+        </section>`;
+    }
     return `
       <section class="assistant-data-visual assistant-comparison-visual">
         <header><div><small>At a glance</small><strong>${escapeHtml(visual.title || "Simple comparison")}</strong></div></header>
@@ -444,6 +475,7 @@
     if (scoreItems.length && !visuals.some((visual) => visual?.kind === "comparison")) {
       visuals.unshift({
         kind: "comparison",
+        layout: "donut",
         title: `${context.symbol || "Stock"} dashboard evidence`,
         items: scoreItems.map(([label, display, score, note]) => ({
           label,
