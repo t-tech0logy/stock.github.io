@@ -518,6 +518,19 @@
     elements.status.hidden = !text;
   }
 
+  function renderQuickActions(mode = state.mode) {
+    elements.quickActions.innerHTML = quickActionItems(mode)
+      .map(([label, prompt, icon]) => `<button type="button" data-assistant-prompt="${escapeHtml(prompt)}"><span aria-hidden="true">${escapeHtml(icon)}</span>${escapeHtml(label)}</button>`)
+      .join("");
+  }
+
+  function setSuggestionsVisible(mode, visible) {
+    state.suggestionsVisible[mode] = Boolean(visible);
+    if (mode !== state.mode) return;
+    if (visible) renderQuickActions(mode);
+    elements.suggestions.hidden = !visible;
+  }
+
   function setBusy(busy, label = "Thinking…") {
     state.busy = busy;
     state.agentActivity = busy ? label : "";
@@ -527,6 +540,7 @@
     elements.modeTrigger.disabled = busy;
     setStatus(busy ? label : state.lastModel ? "Answer ready" : hasGeminiKey ? "Research assistant ready" : "");
     elements.panel.classList.toggle("assistant-is-busy", busy);
+    if (!busy) setSuggestionsVisible(state.mode, true);
     renderMessages();
   }
 
@@ -642,9 +656,7 @@
       : state.mode === "futures"
         ? "Ask about the loaded setup…"
         : "Ask a question…";
-    elements.quickActions.innerHTML = quickActionItems(state.mode)
-      .map(([label, prompt, icon]) => `<button type="button" data-assistant-prompt="${escapeHtml(prompt)}"><span aria-hidden="true">${escapeHtml(icon)}</span>${escapeHtml(label)}</button>`)
-      .join("");
+    renderQuickActions(state.mode);
     elements.suggestions.hidden = !state.suggestionsVisible[state.mode];
     renderMessages();
   }
@@ -1774,8 +1786,7 @@
     if (!text || state.busy) return;
     const mode = state.mode;
     addMessage("user", text, { rawText: text });
-    state.suggestionsVisible[mode] = false;
-    elements.suggestions.hidden = true;
+    setSuggestionsVisible(mode, false);
     elements.input.value = "";
     elements.input.style.height = "auto";
 
@@ -1783,6 +1794,7 @@
       const snapshot = stockSnapshot();
       if (!snapshot) {
         addMessage("assistant", "Choose and fully load a stock in the dashboard above first. Stock Analytics will automatically use that selected stock.");
+        setSuggestionsVisible(mode, true);
         return;
       }
       if (/full|summary|analyse|analyze/i.test(text)) {
@@ -1791,6 +1803,7 @@
       if (!hasGeminiKey) {
         const local = localStockText(text, snapshot);
         addMessage("assistant", local, { rawText: local });
+        setSuggestionsVisible(mode, true);
         return;
       }
     }
@@ -1798,6 +1811,7 @@
     if (mode === "futures" && !state.futures) {
       const local = localNormalText(text);
       addMessage("assistant", `${local}\n\nChoose one of the suggested markets above when you want a simple buy, sell, or wait setup.`);
+      setSuggestionsVisible(mode, true);
       return;
     }
 
@@ -1806,6 +1820,7 @@
         ? localFuturesText(text, state.futures)
         : localNormalText(text);
       addMessage("assistant", local, { rawText: local });
+      setSuggestionsVisible(mode, true);
       return;
     }
 
