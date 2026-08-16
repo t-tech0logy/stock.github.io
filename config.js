@@ -1,7 +1,8 @@
 window.PLAINSTOCK_CONFIG = {
+  apiKeyEncoding: "base64",
   // Testing configuration. This key is public in the browser and must remain
   // restricted to low quotas and disposable test access.
-  polygonApiKey: "UzWc6XI8lOJ0BBURu_bkN0eEH2_T42xD",
+  polygonApiKey: "VXpXYzZYSThsT0owQkJVUnVfYmtOMGVFSDJfVDQyeEQ=",
   polygonApiRoot: "https://api.polygon.io",
   providerLabel: "Polygon"
 };

@@ -2,13 +2,22 @@
   "use strict";
 
   const config = window.PLAINSTOCK_ASSISTANT_CONFIG || {};
+  const decodeConfiguredSecret = (value) => {
+    const secret = String(value || "").trim();
+    if (!secret || String(config.apiKeyEncoding || "").toLowerCase() !== "base64") return secret;
+    try {
+      return atob(secret).trim();
+    } catch {
+      return "";
+    }
+  };
   const dashboard = window.PLAINSTOCK_DASHBOARD || null;
   const assistantProxyRoot = String(config.assistantProxyRoot || "").replace(/\/$/, "");
   const marketProxyRoot = String(config.marketProxyRoot || dashboard?.getMarketProxyRoot?.() || "").replace(/\/$/, "");
   const geminiApiKeys = Array.from(new Set([
     config.geminiApiKey,
     ...(Array.isArray(config.geminiApiKeys) ? config.geminiApiKeys : [])
-  ].map((key) => String(key || "").trim()).filter(Boolean)));
+  ].map(decodeConfiguredSecret).filter(Boolean)));
   if (assistantProxyRoot && !geminiApiKeys.length) geminiApiKeys.push("__SERVER_PROXY__");
   const hasGeminiKey = geminiApiKeys.length > 0;
   const geminiApiRoot = String(config.geminiApiRoot || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");

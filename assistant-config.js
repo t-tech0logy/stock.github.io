@@ -25,12 +25,13 @@ const PLAINSTOCK_MODELS_LIGHT_FIRST = Object.freeze([
 ]);
 
 window.PLAINSTOCK_ASSISTANT_CONFIG = {
+  apiKeyEncoding: "base64",
   // Testing configuration. These browser-visible keys must remain disposable
   // and protected with strict provider quotas.
-  geminiApiKey: "AQ.Ab8RN6L1kHIt5EyiFtlIPQeprKLC80hSPfC81D4zFjPNlv7Ocw",
+  geminiApiKey: "QVEuQWI4Uk42Smt5WEFsYklLQ1c3SHRTQm9ZclNRN0c4TGxlT29EamdWRjhzcjhHdG5teXc=",
   geminiApiKeys: [
-    "AQ.Ab8RN6LkFP_GjE6wFnpvvSlRA8WG-n6mLvdO6CDZLnnTqCljBA",
-    "AQ.Ab8RN6Lz0YPdgIS0OaQbFGECt5RIsSDStajt3Gybk0wcxqYEZA"
+    "QVEuQWI4Uk42S2JKbzJIbjNUZWRpRHhUeWxNVlRzOWFKaEQ5ZVA5dkRmRWdJWHFJQkJlbFE=",
+    "QVEuQWI4Uk42SUcyM2F3ZnQxMjFQM0s1VmxpWHhqZ3RHS2swckJBYjFOcXd3MG5CQjRfT2c="
   ],
   geminiApiRoot: "https://generativelanguage.googleapis.com/v1beta",
   modelRoutes: {

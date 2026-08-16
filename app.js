@@ -1,7 +1,20 @@
 (() => {
   "use strict";
 
-  const polygonApiKey = String(window.PLAINSTOCK_CONFIG?.polygonApiKey || "").trim();
+  function decodeConfiguredSecret(value, encoding) {
+    const secret = String(value || "").trim();
+    if (!secret || String(encoding || "").toLowerCase() !== "base64") return secret;
+    try {
+      return atob(secret).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  const polygonApiKey = decodeConfiguredSecret(
+    window.PLAINSTOCK_CONFIG?.polygonApiKey,
+    window.PLAINSTOCK_CONFIG?.apiKeyEncoding
+  );
   const polygonApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonApiRoot || "https://api.polygon.io").replace(/\/$/, "");
   const polygonExtraApiRoot = String(window.PLAINSTOCK_CONFIG?.polygonExtraApiRoot || polygonApiRoot).replace(/\/$/, "");
   const marketProxyRoot = String(window.PLAINSTOCK_CONFIG?.marketProxyRoot || "").replace(/\/$/, "");
