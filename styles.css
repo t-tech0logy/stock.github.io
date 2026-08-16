@@ -3373,6 +3373,317 @@ body.assistant-fullscreen-open {
   background: #c64b45;
 }
 
+.assistant-flow-list,
+.assistant-timeline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistant-flow-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 18px;
+}
+
+.assistant-flow-list li {
+  position: relative;
+  min-height: 88px;
+  padding: 11px;
+  border: 1px solid #dde3da;
+  border-radius: 12px;
+  display: flex;
+  gap: 8px;
+  background: #fff;
+}
+
+.assistant-flow-list li:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  z-index: 2;
+  color: #7c8c81;
+  font-size: 17px;
+  font-weight: 900;
+  transform: translateY(-50%);
+}
+
+.assistant-flow-list li > span,
+.assistant-risk-legend b {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #fff;
+  background: #68756d;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.assistant-flow-list li.good > span,
+.assistant-risk-legend .good b {
+  background: #258e59;
+}
+
+.assistant-flow-list li.warn > span,
+.assistant-risk-legend .warn b {
+  background: #cf8d27;
+}
+
+.assistant-flow-list li.bad > span,
+.assistant-risk-legend .bad b {
+  background: #c64b45;
+}
+
+.assistant-flow-list li div,
+.assistant-flow-list li strong,
+.assistant-flow-list li small {
+  min-width: 0;
+  display: block;
+}
+
+.assistant-flow-list li strong {
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.assistant-flow-list li small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.assistant-risk-map {
+  position: relative;
+  height: 220px;
+  margin: 6px 5px 12px 26px;
+  border-left: 2px solid #9ca89f;
+  border-bottom: 2px solid #9ca89f;
+  border-radius: 0 10px 0 0;
+  background:
+    linear-gradient(90deg, transparent 49.5%, rgba(72, 91, 78, 0.1) 50%, transparent 50.5%),
+    linear-gradient(0deg, transparent 49.5%, rgba(72, 91, 78, 0.1) 50%, transparent 50.5%),
+    linear-gradient(135deg, #edf6ee, #fff3d8 55%, #f8dfdc);
+}
+
+.assistant-risk-map article {
+  position: absolute;
+  max-width: 92px;
+  transform: translate(-50%, -50%);
+}
+
+.assistant-risk-map article b {
+  width: 25px;
+  height: 25px;
+  margin: auto;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #68756d;
+  box-shadow: 0 2px 7px rgba(30, 42, 34, 0.26);
+  font-size: 9px;
+}
+
+.assistant-risk-map article.good b {
+  background: #258e59;
+}
+
+.assistant-risk-map article.warn b {
+  background: #cf8d27;
+}
+
+.assistant-risk-map article.bad b {
+  background: #c64b45;
+}
+
+.assistant-risk-map article span {
+  margin-top: 2px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  display: block;
+  overflow: hidden;
+  color: #3f4b43;
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 8px;
+  font-weight: 800;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-axis {
+  position: absolute;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.risk-axis-impact {
+  left: -27px;
+  top: 50%;
+  transform: rotate(-90deg) translateX(-50%);
+  transform-origin: top left;
+}
+
+.risk-axis-likelihood {
+  right: 4px;
+  bottom: 4px;
+}
+
+.assistant-risk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assistant-risk-legend > span {
+  padding: 4px 7px 4px 4px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #465249;
+  background: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.assistant-risk-legend b {
+  width: 17px;
+  height: 17px;
+  flex-basis: 17px;
+  font-size: 7px;
+}
+
+.assistant-timeline-list {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.assistant-timeline-list::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: 2px;
+  background: #d8ded7;
+}
+
+.assistant-timeline-list li {
+  position: relative;
+  padding-left: 27px;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.assistant-timeline-list li > i {
+  position: absolute;
+  top: 7px;
+  left: 3px;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #68756d;
+  box-shadow: 0 0 0 1px #cdd4cc;
+}
+
+.assistant-timeline-list li.good > i {
+  background: #258e59;
+}
+
+.assistant-timeline-list li.warn > i {
+  background: #cf8d27;
+}
+
+.assistant-timeline-list li.bad > i {
+  background: #c64b45;
+}
+
+.assistant-timeline-list li div {
+  padding: 8px 10px;
+  border: 1px solid #e1e5de;
+  border-radius: 10px;
+  display: grid;
+  background: #fff;
+}
+
+.assistant-timeline-list li span {
+  color: var(--green);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.assistant-timeline-list li strong {
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.assistant-timeline-list li small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.assistant-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.assistant-balance-grid article {
+  padding: 10px;
+  border: 1px solid #dde3da;
+  border-radius: 11px;
+  display: flex;
+  gap: 8px;
+  background: #fff;
+}
+
+.assistant-balance-grid article > span {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #258e59;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.assistant-balance-grid article.bad > span {
+  background: #c64b45;
+}
+
+.assistant-balance-grid strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.assistant-balance-grid ul {
+  margin: 6px 0 0;
+  padding-left: 14px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
 .assistant-suggestions {
   padding: 6px 13px 11px;
   border-top: 1px solid rgba(223, 225, 216, 0.7);
@@ -3897,6 +4208,19 @@ body.assistant-fullscreen-open {
   .assistant-mode-icon {
     width: 25px;
     height: 25px;
+  }
+
+  .assistant-flow-list,
+  .assistant-balance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-flow-list li:not(:last-child)::after {
+    content: "↓";
+    top: auto;
+    right: 50%;
+    bottom: -18px;
+    transform: translateX(50%);
   }
 
   .assistant-bubble {

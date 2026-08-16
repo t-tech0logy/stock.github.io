@@ -296,7 +296,8 @@
 
   function renderFinancialVisual(visual) {
     const periods = (Array.isArray(visual.periods) ? visual.periods : []).slice(0, 5).map((period) => String(period));
-    const series = (Array.isArray(visual.series) ? visual.series : []).slice(0, 4);
+    const series = (Array.isArray(visual.series) ? visual.series : []).slice(0, 4)
+      .filter((item) => periods.some((period, index) => Number.isFinite(visualNumber(item?.values?.[index]))));
     if (!periods.length || !series.length) return "";
     return `
       <section class="assistant-data-visual assistant-financial-visual">
@@ -354,12 +355,74 @@
       </section>`;
   }
 
+  function renderFlowVisual(visual) {
+    const items = (Array.isArray(visual.items) ? visual.items : []).slice(0, 6);
+    if (items.length < 2) return "";
+    return `
+      <section class="assistant-data-visual assistant-flow-visual">
+        <header><div><small>How it connects</small><strong>${escapeHtml(visual.title || "Simple flow")}</strong></div></header>
+        <ol class="assistant-flow-list">
+          ${items.map((item, index) => `<li class="${visualTone(item?.tone)}"><span>${index + 1}</span><div><strong>${escapeHtml(item?.label || `Step ${index + 1}`)}</strong>${item?.note ? `<small>${escapeHtml(item.note)}</small>` : ""}</div></li>`).join("")}
+        </ol>
+      </section>`;
+  }
+
+  function renderRiskMapVisual(visual) {
+    const items = (Array.isArray(visual.items) ? visual.items : []).slice(0, 6)
+      .map((item) => ({
+        ...item,
+        likelihood: Math.max(5, Math.min(95, visualNumber(item?.likelihood) ?? 50)),
+        impact: Math.max(5, Math.min(95, visualNumber(item?.impact) ?? 50))
+      }));
+    if (!items.length) return "";
+    return `
+      <section class="assistant-data-visual assistant-risk-map-visual">
+        <header><div><small>Likelihood × impact</small><strong>${escapeHtml(visual.title || "Risk map")}</strong></div></header>
+        <div class="assistant-risk-map" role="img" aria-label="${escapeHtml(visual.title || "Risk map")}">
+          <span class="risk-axis risk-axis-impact">Higher impact</span>
+          <span class="risk-axis risk-axis-likelihood">More likely</span>
+          ${items.map((item, index) => `<article class="${visualTone(item?.tone)}" style="left:${item.likelihood}%;top:${100 - item.impact}%" title="${escapeHtml(item?.note || item?.label || `Risk ${index + 1}`)}"><b>${index + 1}</b><span>${escapeHtml(item?.label || `Risk ${index + 1}`)}</span></article>`).join("")}
+        </div>
+        <div class="assistant-risk-legend">${items.map((item, index) => `<span class="${visualTone(item?.tone)}"><b>${index + 1}</b>${escapeHtml(item?.label || `Risk ${index + 1}`)}</span>`).join("")}</div>
+      </section>`;
+  }
+
+  function renderTimelineVisual(visual) {
+    const items = (Array.isArray(visual.items) ? visual.items : []).slice(0, 7);
+    if (items.length < 2) return "";
+    return `
+      <section class="assistant-data-visual assistant-timeline-visual">
+        <header><div><small>What happens when</small><strong>${escapeHtml(visual.title || "Timeline")}</strong></div></header>
+        <ol class="assistant-timeline-list">
+          ${items.map((item) => `<li class="${visualTone(item?.tone)}"><i></i><div><span>${escapeHtml(item?.date || item?.period || "Next")}</span><strong>${escapeHtml(item?.label || "Event")}</strong>${item?.note ? `<small>${escapeHtml(item.note)}</small>` : ""}</div></li>`).join("")}
+        </ol>
+      </section>`;
+  }
+
+  function renderBalanceVisual(visual) {
+    const positive = (Array.isArray(visual.positive) ? visual.positive : []).slice(0, 5).map(String).filter(Boolean);
+    const caution = (Array.isArray(visual.caution) ? visual.caution : []).slice(0, 5).map(String).filter(Boolean);
+    if (!positive.length && !caution.length) return "";
+    return `
+      <section class="assistant-data-visual assistant-balance-visual">
+        <header><div><small>Evidence on both sides</small><strong>${escapeHtml(visual.title || "What helps and what weakens")}</strong></div></header>
+        <div class="assistant-balance-grid">
+          ${positive.length ? `<article class="good"><span>+</span><div><strong>Supportive evidence</strong><ul>${positive.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article>` : ""}
+          ${caution.length ? `<article class="bad"><span>!</span><div><strong>Caution evidence</strong><ul>${caution.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article>` : ""}
+        </div>
+      </section>`;
+  }
+
   function renderVisuals(visuals = []) {
     return visuals.slice(0, 4).map((visual) => {
       if (visual?.kind === "consensus") return renderConsensusVisual(visual);
       if (visual?.kind === "financial-series") return renderFinancialVisual(visual);
       if (visual?.kind === "comparison") return renderComparisonVisual(visual);
       if (visual?.kind === "levels") return renderLevelsVisual(visual);
+      if (visual?.kind === "flow") return renderFlowVisual(visual);
+      if (visual?.kind === "risk-map") return renderRiskMapVisual(visual);
+      if (visual?.kind === "timeline") return renderTimelineVisual(visual);
+      if (visual?.kind === "balance") return renderBalanceVisual(visual);
       return "";
     }).join("");
   }
@@ -841,8 +904,9 @@
   };
 
   function visualContractFor(mode) {
-    if (mode === "stock") return `After the readable answer, output exactly two raw JSON blocks with no Markdown fence. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price evidence","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Financial health","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Valuation and risk","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"}]}[[/PLAINSTOCK_VISUAL]]. Include only checks supported by returned evidence; omit unavailable or 0-confidence checks entirely. Second: [[PLAINSTOCK_VISUAL]]{"kind":"financial-series","title":"Revenue, profit, cash flow and debt","unit":"currency plus scale, for example USD billions","periods":["FY2023","FY2024","FY2025"],"series":[{"name":"Revenue","values":[0,0,0],"tone":"good"},{"name":"Net profit","values":[0,0,0],"tone":"good"},{"name":"Free cash flow","values":[0,0,0],"tone":"good"},{"name":"Total debt","values":[0,0,0],"tone":"warn"}],"note":"short scope note"}[[/PLAINSTOCK_VISUAL]]. Use only verified figures, null for unavailable values, and the same stated unit.`;
-    return `When the answer contains at least two useful comparable numbers, add one raw JSON block with no Markdown fence: [[PLAINSTOCK_VISUAL]]{"kind":"comparison","title":"Simple comparison","items":[{"label":"Metric","display":"human-readable value","score":50,"tone":"good or warn or bad or neutral","note":"why it matters"}]}[[/PLAINSTOCK_VISUAL]]. Score is only a 0-100 bar position for display. Do not add a visual when it would not clarify the answer.`;
+    const optionalFormats = `Available diagram formats are: [[PLAINSTOCK_VISUAL]]{"kind":"flow","title":"How the idea connects","items":[{"label":"Step","note":"short explanation","tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]], [[PLAINSTOCK_VISUAL]]{"kind":"risk-map","title":"Main risks","items":[{"label":"Risk","likelihood":50,"impact":50,"tone":"good or warn or bad","note":"why it matters"}]}[[/PLAINSTOCK_VISUAL]], [[PLAINSTOCK_VISUAL]]{"kind":"timeline","title":"What to watch","items":[{"date":"period or date","label":"Event","note":"why it matters","tone":"good or warn or bad or neutral"}]}[[/PLAINSTOCK_VISUAL]], or [[PLAINSTOCK_VISUAL]]{"kind":"balance","title":"Evidence balance","positive":["supported strength"],"caution":["supported concern"]}[[/PLAINSTOCK_VISUAL]]. Use only evidence already established in the answer. Never invent dates, scores, events, risks, or financial figures merely to fill a visual.`;
+    if (mode === "stock") return `After the readable answer, output two raw JSON blocks with no Markdown fence when the underlying data exists. First: [[PLAINSTOCK_VISUAL]]{"kind":"consensus","title":"Model checks","items":[{"label":"Price evidence","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Financial health","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"},{"label":"Valuation and risk","vote":"POSITIVE or MIXED or CAUTIOUS","confidence":70,"tone":"good or warn or bad"}]}[[/PLAINSTOCK_VISUAL]]. Include only checks supported by returned evidence; omit unavailable or 0-confidence checks entirely. Second: [[PLAINSTOCK_VISUAL]]{"kind":"financial-series","title":"Revenue, profit, cash flow and debt","unit":"currency plus scale, for example USD billions","periods":["FY2023","FY2024","FY2025"],"series":[{"name":"Revenue","values":[0,0,0],"tone":"good"},{"name":"Net profit","values":[0,0,0],"tone":"good"},{"name":"Free cash flow","values":[0,0,0],"tone":"good"},{"name":"Total debt","values":[0,0,0],"tone":"warn"}],"note":"short scope note"}[[/PLAINSTOCK_VISUAL]]. Use only verified figures, null for unavailable values, and the same stated unit. ${optionalFormats} Add at most one of those diagrams when it materially improves the explanation.`;
+    return `When a visual materially clarifies the answer, add at most one raw JSON block with no Markdown fence. For numeric comparisons use [[PLAINSTOCK_VISUAL]]{"kind":"comparison","title":"Simple comparison","items":[{"label":"Metric","display":"human-readable value","score":50,"tone":"good or warn or bad or neutral","note":"why it matters"}]}[[/PLAINSTOCK_VISUAL]]. Score is only a 0-100 display position. ${optionalFormats} Choose either the comparison or one diagram, never both. Do not add a visual when ordinary text is clearer.`;
   }
 
   function instructionsFor(mode) {
