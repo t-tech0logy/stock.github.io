@@ -213,6 +213,16 @@
         if (dashboard) {
           closeIntro();
           closeSection();
+          let nextContentIndex = index + 1;
+          while (nextContentIndex < lines.length && (!lines[nextContentIndex].trim() || /^---+$/.test(lines[nextContentIndex].trim()))) {
+            nextContentIndex += 1;
+          }
+          const nextIsHeading = /^(#{2,4})\s+/.test(String(lines[nextContentIndex] || "").trim());
+          if (nextIsHeading) {
+            if (heading[1].length === 2) output.push(`<div class="assistant-report-group-label"><span></span><strong>${inlineMarkdown(heading[2])}</strong></div>`);
+            index += 1;
+            continue;
+          }
           const icon = tone === "good" ? "✓" : tone === "bad" ? "!" : tone === "warn" ? "~" : "•";
           const expanded = /current dashboard facts|direct conclusion|plain-english conclusion|price summary/i.test(heading[2]);
           output.push(`<details class="assistant-report-section ${tone}"${expanded ? " open" : ""}><summary><span aria-hidden="true">${icon}</span><strong>${inlineMarkdown(heading[2])}</strong><small>View</small></summary><div class="assistant-report-section-body">`);
