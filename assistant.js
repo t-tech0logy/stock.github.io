@@ -164,6 +164,9 @@
     let index = 0;
     let listType = null;
     let sectionOpen = false;
+    let introOpen = dashboard;
+
+    if (introOpen) output.push('<section class="assistant-report-intro"><small>Research summary</small>');
 
     const closeList = () => {
       if (listType) output.push(`</${listType}>`);
@@ -171,8 +174,13 @@
     };
 
     const closeSection = () => {
-      if (sectionOpen) output.push("</section>");
+      if (sectionOpen) output.push("</div></details>");
       sectionOpen = false;
+    };
+
+    const closeIntro = () => {
+      if (introOpen) output.push("</section>");
+      introOpen = false;
     };
 
     while (index < lines.length) {
@@ -203,9 +211,11 @@
         closeList();
         const tone = headingTone(heading[2]);
         if (dashboard) {
+          closeIntro();
           closeSection();
           const icon = tone === "good" ? "✓" : tone === "bad" ? "!" : tone === "warn" ? "~" : "•";
-          output.push(`<section class="assistant-report-section ${tone}"><header><span aria-hidden="true">${icon}</span><h4>${inlineMarkdown(heading[2])}</h4></header>`);
+          const expanded = /current dashboard facts|direct conclusion|plain-english conclusion|price summary/i.test(heading[2]);
+          output.push(`<details class="assistant-report-section ${tone}"${expanded ? " open" : ""}><summary><span aria-hidden="true">${icon}</span><strong>${inlineMarkdown(heading[2])}</strong><small>View</small></summary><div class="assistant-report-section-body">`);
           sectionOpen = true;
         } else {
           output.push(`<h4 class="${tone}">${inlineMarkdown(heading[2])}</h4>`);
@@ -235,9 +245,10 @@
       index += 1;
     }
     closeList();
+    closeIntro();
     closeSection();
     const content = output.join("");
-    return dashboard ? `<div class="assistant-report-dashboard">${content}</div>` : content;
+    return dashboard ? `<div class="assistant-report-toolbar"><div><small>Detailed research</small><strong>Explore the evidence</strong></div><span>Open a section ↓</span></div><div class="assistant-report-dashboard">${content}</div>` : content;
   }
 
   function decisionMeta(text, mode) {
@@ -1508,7 +1519,10 @@
   function presentAiResult(result, mode = state.mode) {
     const presentation = extractPresentation(result.text);
     const visuals = mode === "stock" ? stockResponseVisuals(presentation.visuals) : presentation.visuals;
-    const answer = `${renderMarkdown(presentation.text, { dashboard: mode === "stock" })}${renderVisuals(visuals)}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
+    const reportText = mode === "stock"
+      ? presentation.text.replace(/^\s*(?:#{1,4}\s*)?Research view\s*:\s*(?:POSITIVE|MIXED|WEAK) TREND\s*/i, "").trim()
+      : presentation.text;
+    const answer = `${renderVisuals(visuals)}${renderMarkdown(reportText, { dashboard: mode === "stock" })}${sourcesHtml(result.sources)}${searchWidgetsHtml(result.searchWidgets)}`;
     addMessage("assistant", answer, { mode, trusted: true, rawText: presentation.text, label: result.label || state.lastModel });
   }
 
